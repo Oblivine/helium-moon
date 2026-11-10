@@ -18,6 +18,7 @@ async def play(port):
             assert not await page.evaluate('window.LOAD_ERROR')
             await page.locator('#loading').wait_for(state='hidden')
             await page.click('#menu-main [data-act=single]')
+            await page.click('#single-go')
             output=Path(os.environ.get('HM_ARTIFACT_DIR','/tmp/helium-moon-reveals'))
             output.mkdir(parents=True,exist_ok=True)
             for kind in ['watcher','crossing']:

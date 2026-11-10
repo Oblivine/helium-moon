@@ -17,9 +17,10 @@ export class LocalTransport extends Emitter {
     this.acc = 0; this.paused = false; this.name = 'You';
   }
   myId() { return this.id; }
-  start(name) {
+  start(name, difficulty) {
     this.name = name || this.name;
-    this.sim = new GameSim(this.world, { seed: (Math.random() * 2 ** 31) | 0 });
+    if (difficulty) this.difficulty = difficulty;
+    this.sim = new GameSim(this.world, { seed: (Math.random() * 2 ** 31) | 0, difficulty: this.difficulty || 'ranger' });
     this.sim.addPlayer(this.id, this.name);
     this.acc = 0;
     this.emit('start', { info: this.sim.info() });

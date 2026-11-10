@@ -75,6 +75,8 @@ async def play(port):
                 assert found, f'interaction prompt reachable for {item_id}'
 
             await page.click('#menu-main [data-act=single]')
+
+            await page.click('#single-go')
             await advance(0.2)
             assert await page.evaluate("game.mode === 'playing' && game.myState === 'alive'")
             await page.evaluate('''() => {

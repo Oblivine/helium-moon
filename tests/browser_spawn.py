@@ -23,6 +23,7 @@ async def play(port):
             assert not await page.evaluate('window.LOAD_ERROR')
             await page.evaluate('ui.clickToPlay=()=>{}')
             await page.click('#menu-main [data-act=single]')
+            await page.click('#single-go')
             result=await page.evaluate('''()=>{
                 game.sim.hv.update=game.sim.sf.update=game.sim.director.update=game.sim.mimic.update=()=>{};
                 game.advance(30,1/30,false);document.querySelector('#intro').style.display='none';game.step(0,true);

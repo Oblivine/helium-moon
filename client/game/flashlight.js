@@ -92,7 +92,7 @@ export class Flashlight {
     this.dir.set(0, 0, -1).applyQuaternion(this.handQ);
     this.light.position.copy(this.handPos);
     if (this.on) {
-      this.battery = Math.max(0, this.battery - dt / F.BATTERY_SECONDS);
+      this.battery = Math.max(0, this.battery - dt / (F.BATTERY_SECONDS * (this.fuelMul || 1)));
       if (this.battery <= 0) { this.on = false; this.clickCb && this.clickCb(false, true); }
     }
     // gutter: low fuel, his closeness, gas, and (owner) him running at you

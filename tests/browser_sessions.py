@@ -61,6 +61,7 @@ async def run(port):
 
             # Real menu action: replacing the transport must leave the old room.
             await page.click("#menu-main [data-act=single]")
+            await page.click('#single-go')
             await page.wait_for_function("game.mode === 'playing' && !game.net.networked")
             await page.wait_for_function("oldSocket.readyState === WebSocket.CLOSED")
             await observer.wait_for_function("observed.some(m => m.t === 'lobby' && m.host === peerId && m.players.length === 1)")

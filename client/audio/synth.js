@@ -315,6 +315,125 @@ export function lighterRelease(seed) {
   return fade(normalize(out, 0.6), SR, 0.001, 0.05);
 }
 
+// ================================================================== Update 0.9 "The Long Night"
+// a latex balloon bursting: one very sharp crack, a short hollow ring, shreds settling
+export function balloonPop(seed) {
+  const r = rngFor(seed), out = new Float32Array(N(0.6));
+  const cr = N(0.012), nz = noise(cr, r);
+  for (let i = 0; i < cr; i++) out[i] += nz[i] * Math.exp(-i / SR * 420) * 1.6;
+  const body = N(0.16), bz = filter(noise(body, r), 'bp', r.range(900, 1300), 2.5, SR);
+  for (let i = 0; i < body; i++) out[i] += bz[i] * Math.exp(-i / SR * 34) * 0.9;
+  const th = N(0.08); for (let i = 0; i < th; i++) out[i] += Math.sin(TAU * 140 * i / SR) * Math.exp(-i / SR * 60) * 0.5;
+  const sh = N(0.3), sz = filter(noise(sh, r), 'hp', 3500, 0.7, SR);
+  for (let i = 0; i < sh; i++) out[N(0.05) + i] += sz[i] * env(i / SR, 0.01, 0.07) * 0.12;
+  return fade(normalize(softclip(out, 1.6), 0.95), SR, 0.0005, 0.08);
+}
+// rubber squeaking against string as it is untied, then a soft slip
+export function balloonSqueak(seed) {
+  const r = rngFor(seed), d = 0.7, n = N(d), out = new Float32Array(n);
+  let ph = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / SR, on = (t > 0.05 && t < 0.22) || (t > 0.3 && t < 0.42) ? 1 : 0;
+    const f = 1500 + 500 * Math.sin(t * 31) + 200 * Math.sin(t * 77);
+    ph += f / SR; out[i] = on * (Math.sin(TAU * ph) * 0.5 + (ph % 1 - 0.5) * 0.3) * (0.6 + 0.4 * Math.sin(t * 190));
+  }
+  const sl = N(0.2), sz = filter(noise(sl, r), 'bp', 2400, 1, SR);
+  for (let i = 0; i < sl; i++) out[N(0.46) + i] += sz[i] * env(i / SR, 0.02, 0.05) * 0.5;
+  return fade(normalize(filter(out, 'lp', 5000, 0.7, SR), 0.35), SR, 0.01, 0.08);
+}
+// a freight train a couple of miles off: a long two-chord horn (the grade-crossing pattern,
+// long long short long), smeared by distance, over wheel rumble that swells and fades
+export function distantTrain(seed) {
+  const r = rngFor(seed), d = 22, n = N(d), out = new Float32Array(n);
+  const chord = [311, 370, 415].map((f) => f * r.range(0.985, 1.015));
+  const blasts = [[2.0, 2.6], [5.4, 2.6], [8.8, 0.9], [10.4, 3.6]];
+  for (const [t0, len] of blasts) {
+    const s0 = N(t0), ln = N(len);
+    for (let i = 0; i < ln; i++) {
+      const t = i / SR, e = Math.min(1, t / 0.25) * Math.min(1, (len - t) / 0.5);
+      let v = 0; for (const f of chord) v += Math.sin(TAU * f * (t0 + t) * (1 - 0.004 * (t0 + t) / d)) + 0.35 * Math.sin(TAU * 2 * f * (t0 + t));
+      out[s0 + i] += v * e * 0.16;
+    }
+  }
+  const rum = filter(brown(n, r), 'lp', 140, 0.7, SR);
+  for (let i = 0; i < n; i++) { const t = i / SR; out[i] += rum[i] * Math.sin(Math.PI * t / d) ** 1.5 * 0.9 * (0.8 + 0.2 * Math.sin(t * 7.3)); }
+  // distance: no highs, and a slow wash
+  const far = filter(filter(out, 'lp', 900, 0.6, SR), 'lp', 1400, 0.6, SR);
+  for (let i = N(0.35); i < n; i++) far[i] += far[i - N(0.35)] * 0.32;
+  return fade(normalize(far, 0.8), SR, 1.5, 3);
+}
+// a farm dog, far off: a few gruff barks with an echo off the tree line
+export function farmDog(seed) {
+  const r = rngFor(seed), d = 3.6, out = new Float32Array(N(d)), barks = r.int(2, 5), base = r.range(210, 290);
+  let t0 = 0.05;
+  for (let b = 0; b < barks; b++) {
+    const len = r.range(0.11, 0.17);
+    const seg = voice(SR, len, { f0: (t) => base * (1.25 - 0.5 * t / len) + Math.sin(t * 90) * 14, vowel: (t) => lerpVowel(VOWELS.a, VOWELS.o, t / len), breath: 0.35, formantShift: 0.95, rng: r,
+      env: (t) => Math.min(1, t / 0.012) * Math.exp(-t / (len * 0.55)) });
+    mixInto(out, seg, N(t0), r.range(0.7, 1));
+    t0 += len + r.range(0.16, b % 2 ? 0.55 : 0.28);
+    if (t0 > d - 1) break;
+  }
+  const dly = N(0.31); for (let i = dly; i < out.length; i++) out[i] += out[i - dly] * 0.28;
+  return fade(normalize(filter(filter(softclip(out, 2.2), 'lp', 1500, 0.7, SR), 'hp', 180, 0.7, SR), 0.75), SR, 0.005, 0.4);
+}
+// a dead limb letting go: a dry crack, a rush of twigs, a heavy thump in the leaves
+export function branchFall(seed) {
+  const r = rngFor(seed), out = new Float32Array(N(2.4));
+  for (const [t0, g] of [[0, 1], [r.range(0.07, 0.13), 0.6]]) {
+    const len = N(0.05), nz = filter(noise(len, r), 'bp', r.range(1100, 1900), 1.4, SR);
+    for (let i = 0; i < len; i++) out[N(t0) + i] += nz[i] * Math.exp(-i / SR * 110) * g * 1.4;
+  }
+  const sw = N(0.8), sz = filter(noise(sw, r), 'bp', 2600, 0.6, SR);
+  for (let i = 0; i < sw; i++) { const t = i / SR; out[N(0.25) + i] += sz[i] * Math.sin(Math.PI * t / 0.8) ** 2 * 0.3 * (0.6 + 0.4 * Math.sin(t * 60)); }
+  const at = N(1.02), th = N(0.5);
+  for (let i = 0; i < th; i++) out[at + i] += Math.sin(TAU * r.range(52, 60) * i / SR) * Math.exp(-i / SR * 11) * 1.1;
+  const lf = N(0.6), lz = filter(noise(lf, r), 'bp', 1400, 0.6, SR);
+  for (let i = 0; i < lf; i++) out[at + i] += lz[i] * env(i / SR, 0.01, 0.12) * 0.55;
+  return fade(normalize(out, 0.9), SR, 0.001, 0.3);
+}
+// a car alarm back at the lot (loops): six rising chirps, then the two-tone
+export function carAlarmLoop() {
+  const L = 4.8, n = N(L), out = new Float32Array(n);
+  let ph = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / SR; let f;
+    if (t < 2.4) { const u = (t % 0.4) / 0.4; f = 1500 + 1500 * u; }
+    else f = (Math.floor((t - 2.4) / 0.3) % 2) ? 2100 : 2700;
+    ph += f / SR; out[i] = (ph % 1 < 0.5 ? 1 : -1) * 0.5 + Math.sin(TAU * ph) * 0.5;
+  }
+  return normalize(filter(out, 'lp', 4200, 0.7, SR), 0.5);
+}
+// co-op ping: two soft taps on wood (quiet, close, nothing like an alarm)
+export function pingTick(seed) {
+  const r = rngFor(seed), out = new Float32Array(N(0.3));
+  for (const [t0, g] of [[0, 1], [0.11, 0.7]]) {
+    const len = N(0.07), f = r.range(620, 700);
+    for (let i = 0; i < len; i++) out[N(t0) + i] += (Math.sin(TAU * f * i / SR) + 0.4 * Math.sin(TAU * f * 2.7 * i / SR)) * Math.exp(-i / SR * 70) * g;
+  }
+  return fade(normalize(out, 0.5), SR, 0.001, 0.05);
+}
+// handheld radio: squelch tail, key click
+export function radioBlip(seed) {
+  const r = rngFor(seed), out = new Float32Array(N(0.42));
+  const nz = filter(noise(out.length, r), 'bp', 2000, 0.8, SR);
+  for (let i = 0; i < out.length; i++) { const t = i / SR; out[i] = nz[i] * (t < 0.28 ? 0.55 : 0) + (t > 0.28 && t < 0.3 ? (r() - 0.5) * 1.6 : 0); }
+  for (let i = 0; i < N(0.05); i++) out[i] += Math.sin(TAU * 1250 * i / SR) * 0.4 * (1 - i / N(0.05));
+  return fade(normalize(softclip(out, 2), 0.5), SR, 0.002, 0.03);
+}
+// your lungs giving out after holding your breath too long: a ragged gasp in, a shaky breath out
+export function gasp(seed) {
+  const r = rngFor(seed), d = 1.5, n = N(d), out = new Float32Array(n), nz = noise(n, r);
+  const bp = new Biquad('bp', 1500, 1.1, SR);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR, inh = t < 0.55;
+    if ((i & 31) === 0) bp.set('bp', inh ? 900 + 2600 * (t / 0.55) : 1700 - 700 * ((t - 0.6) / 0.9), inh ? 1.6 : 0.9);
+    const e = inh ? Math.sin(Math.PI * t / 0.55) ** 0.6 : t < 0.68 ? 0 : Math.sin(Math.PI * (t - 0.68) / 0.82) ** 0.8 * 0.55;
+    out[i] = bp.tick(nz[i]) * e * (1 + 0.25 * Math.sin(t * 47));
+  }
+  return fade(normalize(out, 0.7), SR, 0.01, 0.15);
+}
+
 export function coyotes(seed) {
   const r = rngFor(seed), dur = 5.5, out = new Float32Array(N(dur));
   for (let v = 0; v < 4; v++) {

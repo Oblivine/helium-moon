@@ -29,6 +29,7 @@ async def check(port,commit):
             assert await page.evaluate("game.audio.playerBreathSource==='recorded'")
             await page.locator('#loading').wait_for(state='hidden')
             await page.click('#menu-main [data-act=single]')
+            await page.click('#single-go')
             await page.evaluate('game.advance(60,1/30,false)')
             assert await page.evaluate("game.mode==='playing' && game.myState==='alive'")
             await page.evaluate('game.quitToMenu(true)')

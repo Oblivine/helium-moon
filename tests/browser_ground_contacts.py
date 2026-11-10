@@ -19,6 +19,7 @@ async def play(port):
             assert not await page.evaluate('window.LOAD_ERROR')
             await page.locator('#loading').wait_for(state='hidden')
             await page.click('#menu-main [data-act=single]')
+            await page.click('#single-go')
             result=await page.evaluate('''async()=>{
                 const {groundAt}=await import('/shared/physics.js');
                 const w=game.world,v=game.hv;

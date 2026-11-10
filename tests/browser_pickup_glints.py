@@ -18,6 +18,7 @@ async def play(port):
             assert not await page.evaluate('window.LOAD_ERROR')
             await page.locator('#loading').wait_for(state='hidden')
             await page.click('#menu-main [data-act=single]')
+            await page.click('#single-go')
             for seed in range(1,13):
                 await page.evaluate('''seed=>{
                     const random=Math.random;

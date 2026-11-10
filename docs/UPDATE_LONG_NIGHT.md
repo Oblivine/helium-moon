@@ -62,3 +62,33 @@ four-minute cooldown, which explicitly includes extraction); proximity heartbeat
 `shared/sim/ambient.js`, `shared/sim/stats.js`, `client/game/*`, `client/ui/*`,
 `client/core/*`, `client/audio/synth.js` + `audio.js` (new sounds only), `index.html`,
 `client/entities/views.js` (new view classes only), new tests, hosted build.
+
+## As built (Claude, Nov 10 2026)
+
+Everything in the feature table shipped. Where it lives:
+
+| ID | Where | Notes |
+|---|---|---|
+| A1 | `client/ui/touch.js`, `client/main.js`, `style.css` (`html.touch`) | Floating move stick (edge = sprint), drag to look, USE/LIGHTER/CROUCH (toggle)/JUMP→BREATH/PEBBLE/BLANKET/PING/NOTES/pause. Phones get Low quality until the player picks one. `?touch=1` forces it. |
+| A2 | Settings → Graphics → Brightness | Multiplies tone-mapping exposure. |
+| A3 | `client/game/flashlight.js` | Unlit view model dimmed by the flame + a soft glow sprite. |
+| B1 | `heliumVoice.listenForBreath`, `CONFIG.BREATH`, `game._breath` | Hold Jump while crouched and still. Lungs per difficulty; empty lungs = gasp heard at 14 m. Breath-hearing radius per difficulty. Breathing sounds are suppressed while holding. |
+| B2 | `CONFIG.DIFFICULTY`, `sim.rules` | Host picks in the lobby; solo picks on the Single Player panel. Multiplies health, cooldowns, search time, lighter fuel, hearing, lungs. |
+| B4 | `shared/sim/balloons.js`, `client/entities/balloons.js` | One omen balloon ahead of the player 70–130 s in; a mark where he watched you (counted reveal) and where he gave up a hunt; placed after you leave. Walk into one uncrouched: pop (`hearNoise` 45 m). Pebble pops. E unties (it floats away). Max 7. Own RNG. |
+| B5 | `shared/sim/ambient.js`, synth `distantTrain/farmDog/branchFall/carAlarmLoop` | Own RNG, independent of him; never near a hunt. |
+| B6 | `ping` action (Z / PING) | Co-op only; ring + beam visible to the team for 7 s. |
+| C1 | `shared/sim/stats.js`, `ui.showEnd` | Night report: rank, 8 stats, roster table in co-op, feats/record banners, a tip. |
+| C2 | `client/core/journal.js`, `ui.openJournal` | localStorage `heliummoon.journal.v1`: records per difficulty, 14 feats, notes archive. Erase with a two-tap button. |
+| C3 | `objectives.js` NOTES (14) | Four per night from a separate RNG; main stream untouched. |
+| C4 | `sim.updateRadio`, `game._radio` | County dispatch lines after the call and near the bridge; subtitles (setting). No Helium speech. |
+| D1 | `game._compass`, `ui.compass` | Cardinals plus pips for the current task once the memo is read. |
+| D2 | `game._hints`, `ui.hint`, `nightTip` | Each hint once per browser; Settings → Game → "Show them again". |
+| D5 | menu foot link, `ui.openWhatsNew` | |
+
+Tests: `tests/long_night.test.mjs` (in `npm test`), `tests/browser_long_night.py` (desktop and
+`HM_PHONE=1`), `tests/browser_touch.py`. Browser tests that start a solo night now click
+`#single-go` after Single Player. Multiplayer browser tests need `HM_TEST=1`.
+
+Not verified: long real-time human play of the new balance (breath radius, balloon density)
+— numbers are first guesses in `CONFIG.BREATH` / `CONFIG.BALLOON`; screenshot-heavy suites
+(spawn, playthrough, perf) time out in the sandbox renderer as before.

@@ -19,6 +19,8 @@ import { PlayerController } from './player.js';
 import { Flashlight } from './flashlight.js';
 import { BreathFX, AnomalyFX } from './effects.js';
 import { PebbleViews } from './pebbles.js';
+import { BalloonViews, PingViews } from '../entities/balloons.js';
+import { Journal, nightTip } from '../core/journal.js';
 import { Input } from '../core/input.js';
 import { TouchControls } from '../ui/touch.js';
 import { AudioEngine } from '../audio/audio.js';
@@ -104,6 +106,8 @@ export class Game {
     this.objViews = new ObjectiveViews(this.scene, this.propMats);
     this.breath = new BreathFX(this.scene);
     this.pebbles = new PebbleViews(this.scene,world);
+    this.balloons = new BalloonViews(this.scene); this.pings = new PingViews(this.scene);
+    this.journal = Journal.load();
     this.anomaly = new AnomalyFX(this.scene, world);
     progress(0.72, 'Recording the night');
     this.audio = new AudioEngine(set);
@@ -203,7 +207,7 @@ export class Game {
     this.audio.resume();
     const t = new LocalTransport(this.world);
     this.attach(t);
-    t.start(name || this.settings.playerName || 'You');
+    t.start(name || this.settings.playerName || 'You', this.settings.difficulty);
   }
 
   _onLobby(m) {
@@ -248,7 +252,12 @@ export class Game {
     this.player.injured = 0; this.player.slow = 1; this.player.downed = 0; this.player.lookLock = null; this._attackLock = 0; this._attackLockPending = 0; this._grab = null; this.player.eyeOffset = 0; this.player.extraRoll = 0; if (this.camera.fov !== this.settings.fov) { this.camera.fov = this.settings.fov; this.camera.updateProjectionMatrix(); }
     this.flashlight.battery = 1; this.flashlight.on = true; this.flashlight.snap(this.camera);
     this.terror = 0; this.fear = 0; this.cold = 0; this.critical = 0; this.gasFx = 0; this.damage = 0; this.chasing = false;
-    this.me = null; this.myState = 'alive'; this.health = CONFIG.PLAYER.MAX_HEALTH;
+    this.rules = info.rules || { id: 'ranger', ...CONFIG.DIFFICULTY.ranger };
+    this.me = null; this.myState = 'alive'; this.health = this.rules.health;
+    this.flashlight.fuelMul = this.rules.fuel;
+    this.lungs = this.rules.lungs; this.holdingBreath = false; this.gaspT = 0; this.lungDelay = 0;
+    this.balloons.clear(); this.pings.clear(); this.subs = []; this.subT = 0; this.ui.subtitle(null); this.ui.hint(null);
+    this._alarmT = 0; this._hintT = 12; this._sawHunt = false;
     this.pebbleReadyAt=0;
     this.notesRead = []; this.reading = null; this.sessionT = 0; this.fade = 1; this.fadeTarget = 0;
     this.obj = null; this.team = { fuel: false, fuse: false }; this.extractOpen = false; this.spectate = null;
@@ -359,6 +368,7 @@ export class Game {
     if (this.snapT < 0) this.renderT = s.t - this.interp;
     this.snapT = s.t; this.simState = s.st; this.phase = s.ph;
     this.pebbles.sync(s.pebbles,s.t);
+    this.balloons.sync(s.bl);
     this.hvBuf.push(s.t, s.hv); this.sfBuf.push(s.t, s.sf);
     for (const row of s.pl) {
       if (row[0] === this.myId) { this.me = row; continue; }
@@ -465,7 +475,7 @@ export class Game {
         this.chasing = !!e.on;
         break;
       case 'hit':
-        if (e.pid === this.myId) { this.damage = 1; this.player.shake = 1.2; A.ui('hurt', 0.9); this.player.injured = 1; if (e.by === 'hv') this._attackLockPending = 1.5; }
+        if (e.pid === this.myId) { this.damage = 1; this.player.shake = 1.2; A.ui('hurt', 0.9); this.player.injured = 1; if (e.by === 'hv') { this._attackLockPending = 1.5; const left = Math.max(0, (e.health ?? 1) - 1); this._hint('grabbed', left > 0 ? `He let go. You can survive ${left === 1 ? 'one more grab' : left + ' more grabs'}. The one after that is the last.` : 'He let go. The next time he gets hold of you is the last.', 8000); } }
         else { this._reactAvatar(e.pid, pos, true); const a = this.avatars.get(e.pid); if (a) A.at('hurt', { x: a.pos.x, y: a.pos.y + 1.5, z: a.pos.z }, { gain: 1, ref: 5 }); }
         break;
       case 'downed': case 'dead':
@@ -498,7 +508,7 @@ export class Game {
         if (e.pid === this.myId) {
           if (e.kind === 'battery') { this.flashlight.addBattery(CONFIG.FLASHLIGHT.BATTERY_PICKUP); A.ui('clink', 0.6); this.ui.toast('A spare lighter. More fuel.', 2000); }
           else if (e.kind === 'blanket') { this.player.hasCamoBlanket = true; A.ui('paper', 0.55); this.ui.toast('Camouflage blanket: crouch, light off, hold X while still to hide.', 4500); }
-          else if (e.kind === 'note') { A.ui('paper', 0.8); const n = this._sessionNote(e.note); if (n) { this.notesRead.push(n.id); this.reading = n; this.ui.showNote(n); } }
+          else if (e.kind === 'note') { A.ui('paper', 0.8); const n = this._sessionNote(e.note); if (n) { this.notesRead.push(n.id); this.reading = n; this.ui.showNote(n, this.journal.noteFound(n.id)); } }
           else { A.ui('clink', 0.7); this.ui.toast(e.kind === 'fuel' ? 'Picked up the gas can.' : e.kind==='crank'?'Handwheel recovered. Fit it to the far-bank aerial and turn toward the mast.':'Picked up the fuse kit.', 3000); }
         } else if (it && e.kind !== 'battery') this.ui.toast(`${this._name(e.pid)} found ${e.kind === 'note' ? 'a note' : it.name.toLowerCase()}.`, 3000);
         if (e.kind === 'note' && e.pid !== this.myId) { const n = NOTES.find((q) => q.id === e.note); if (n && !this.notesRead.includes(n.id)) this.notesRead.push(n.id); }
@@ -506,6 +516,26 @@ export class Game {
         break;
       }
       case 'mimic': this.voice.onMimicEvent(e); break;
+      // ---- Update 0.9
+      case 'balloon_pop':
+        this.balloons.pop(e.id, pos);
+        A.at('balloonPop' + ((e.seq || 0) % 2), pos, { bus: 'sfx', gain: 1.7, ref: 9, reverb: 0.5 });
+        if (e.pid === this.myId) this.player.shake = Math.max(this.player.shake, 0.5);
+        else this._reactAvatar(e.pid, pos);
+        if (e.pid === this.myId) this._hint('popped', 'That was loud. If he is anywhere near, he heard it. Crouch to pass under them, or untie them.');
+        break;
+      case 'balloon_untie': this.balloons.untie(e.id); A.at('balloonSqueak', pos, { bus: 'sfx', gain: 0.5, ref: 2, reverb: 0.05 }); break;
+      case 'ambient': this._ambient(e, pos); break;
+      case 'ping': {
+        this.pings.add(pos, PLAYER_COLORS[(this.names.get(e.pid)?.idx || 0) % PLAYER_COLORS.length]);
+        A.at('pingTick', pos, { bus: 'sfx', gain: 0.8, ref: 6, reverb: 0.1, occlude: false });
+        break;
+      }
+      case 'radio': this._radio(e.id); break;
+      case 'hv_hunt_phase':
+        if (e.phase === 'search' && e.pid === this.myId) this._hint('search', this.touch ? 'He is searching for you. Stay low, dark and still. If he comes close, hold BREATH. PEBBLE thrown away from you draws him off.' : `He is searching for you. Stay low, dark and still. If he comes close, hold ${this.settings.keyName(this.settings.bindings.jump)} to hold your breath. ${this.settings.keyName(this.settings.bindings.pebble)} throws a pebble to draw him off.`, 11000);
+        break;
+      case 'hv_heard': if (e.pid === this.myId) this._hint('heard', 'He heard you breathing. Next time, hold your breath while he is close.'); break;
       case 'objective_step': this._objectivesDirty = true; break;
       case 'objective_dial': this._objectivesDirty = true; break;
       case 'end': this._end(e); break;
@@ -559,7 +589,11 @@ export class Game {
     this.mode = 'ended'; this.input.enabled = false; this.input.exitLock();
     this.ui.showHUD(false); this.ui.showPause(false); this.ui.showNote(null);
     const me = r.players.find((p) => p.id === this.myId);
-    this.ui.showEnd(r, { me: me ? me.state : 'dead', networked: !!this.net.networked, host: this._isHost(), notes: this.notesRead.length });
+    // file the night in the journal (once), then show the report
+    const filed = this.journal.record(r, this.myId, this.rules, this.notesRead);
+    this.touch?.setVisible(false);
+    this.ui.showEnd(r, { me: me ? me.state : 'dead', networked: !!this.net.networked, host: this._isHost(), notes: this.notesRead.length,
+      filed, rules: this.rules, tip: nightTip(r, filed.stats, filed.me), names: this.names, myId: this.myId, journal: this.journal });
   }
 
   // ---------------------------------------------------------------- main loop
@@ -586,7 +620,7 @@ export class Game {
     else this._menuCamera(dt);
     this.env.update(gameplayDt, this.camera, 0);
     this.audio.setListener(this.camera);
-    this.audio.update(dt, { terror: this.terror, fear: this.fear, cold: this.cold, exert: this.exert || 0, gas: this.gasFx, downed: this.player.downed, critical: this.critical, hunt: this._huntHum(), hush: this._hush(), hushRelease: this._hushRelease || 6, huntNear: this.hv ? clamp(1 - this.hv.pos.distanceTo(this.player.pos) / 40, 0, 1) : 0, inGame: this.mode === 'playing' && !this.paused, menu: this.mode !== 'playing' });
+    this.audio.update(dt, { holdBreath: this.holdingBreath && this.mode === 'playing', terror: this.terror, fear: this.fear, cold: this.cold, exert: this.exert || 0, gas: this.gasFx, downed: this.player.downed, critical: this.critical, hunt: this._huntHum(), hush: this._hush(), hushRelease: this._hushRelease || 6, huntNear: this.hv ? clamp(1 - this.hv.pos.distanceTo(this.player.pos) / 40, 0, 1) : 0, inGame: this.mode === 'playing' && !this.paused, menu: this.mode !== 'playing' });
     const meP = this.player.pos;
     this.voice.update(dt, {
       ptt: this.mode === 'playing' && !this.input.textFocus && this.input.down('talk'), inGame: this.mode === 'playing',
@@ -651,7 +685,7 @@ export class Game {
     const downed = this.myState === 'downed', dead = this.myState === 'dead' || this.myState === 'escaped';
     pl.downed = lerp(pl.downed, downed ? 1 : 0, 1 - Math.exp(-dt * 3));
     pl.slow = this.gasFx > 0.3 ? 0.6 : 1;
-    pl.injured = this.health < CONFIG.PLAYER.MAX_HEALTH ? 1 : 0;
+    pl.injured = this.health < (this.rules?.health ?? CONFIG.PLAYER.MAX_HEALTH) ? 1 : 0;
     const frozen = !active || typing || downed || dead || !!this.reading || !!this._grab;
     this._grabTick(dt);
     // Attack lock (owner, Oct 25): the instant he strikes you, the camera is pulled onto his
@@ -679,6 +713,9 @@ export class Game {
       else this.net.send({t:'act',a:'pebble',yaw:pl.yaw,pitch:pl.pitch});
     }
     this.pebbles.update(dt);
+    this.balloons.update(dt); this.pings.update(dt);
+    this._breath(dt, active && !typing && !this.reading);
+    if (active && !typing && inp.hit('ping') && this.net.networked && (this.myState === 'alive' || this.myState === 'downed')) this._ping();
     // ---- interpolation clock
     if (this.snapT >= 0) {
       const target = this.snapT - this.interp;
@@ -738,7 +775,7 @@ export class Game {
       this.inputT = 1 / CONFIG.NET.INPUT_HZ;
       this.net.send({ t: 'in', x: +pl.pos.x.toFixed(2), y: +pl.pos.y.toFixed(2), z: +pl.pos.z.toFixed(2), yaw: +pl.yaw.toFixed(3), pitch: +pl.pitch.toFixed(3),
         viewFov: this.camera.fov, viewAspect: this.camera.aspect, lean:+pl.lean.toFixed(3),
-        crouch: pl.crouching, sprint: pl.sprinting, flash: fl.on && fl.light.intensity > 1, noise: +(pl.noise + (this.useId && this._stationNoisy ? 0.6 : 0)).toFixed(2),
+        crouch: pl.crouching, sprint: pl.sprinting, flash: fl.on && fl.light.intensity > 1, noise: +Math.max(pl.noise + (this.useId && this._stationNoisy ? 0.6 : 0), this.gaspT > 0 ? 0.42 : 0).toFixed(2), breath: this.holdingBreath,
         voice: +this.voice.voiceLevel.toFixed(2), hidden: pl.hidden, covered: pl.covered, paused:this.paused, use: this.useId || null, revive: this.reviveId || null });
     }
     if (this.touch) {
@@ -949,6 +986,130 @@ export class Game {
     if (k > 0.04 && this.myState !== 'dead') this.breath.puff(this.camera, k, lit);
   }
 
+  // ---------------------------------------------------------------- Update 0.9 helpers
+  // Hold your breath: crouched and still, hold Jump. Lungs are yours (like stamina): they drain
+  // while you hold, refill when you breathe, and if they empty you gasp - loudly - for a moment.
+  _breath(dt, active) {
+    const pl = this.player, B = CONFIG.BREATH, max = this.rules?.lungs || 10;
+    if (this.gaspT > 0) this.gaspT -= dt;
+    const can = active && this.myState === 'alive' && pl.crouching && pl.speed < 0.6 && this.gaspT <= 0 && !this._grab;
+    const want = can && this.input.down('jump') && this.lungs > 0;
+    if (want) {
+      if (!this.holdingBreath) this.audio.ui('in0', 0.5);
+      this.lungs = Math.max(0, this.lungs - dt); this.lungDelay = B.REFILL_DELAY;
+      if (this.lungs <= 0) { this.gaspT = B.GASP; this.audio.ui('gasp', 0.9); this.player.shake = Math.max(this.player.shake, 0.25); }
+    } else {
+      this.lungDelay -= dt;
+      if (this.lungDelay <= 0) this.lungs = Math.min(max, this.lungs + dt * B.REFILL * (max / 10));
+    }
+    this.holdingBreath = !!want && this.lungs > 0;
+  }
+
+  // the point on the ground (or a trunk) you are looking at, for a ping
+  _ping() {
+    const w = this.world, p = this.camera.position, d = this.camera.getWorldDirection(this._v7 || (this._v7 = new THREE.Vector3()));
+    let hit = null;
+    for (let k = 2; k < 90; k++) {
+      const t = k * 0.5, x = p.x + d.x * t, y = p.y + d.y * t, z = p.z + d.z * t, g = w.heightAt(x, z);
+      if (y < g + 0.05) { hit = { x, y: g, z }; break; }
+      if (w.lineOfSight(p.x, p.y, p.z, x, y, z, { brushK: 0 }) < 0.5) { hit = { x, y: Math.max(g, y - 0.2), z }; break; }
+    }
+    if (!hit) { const t = CONFIG.PING.RANGE - 1; hit = { x: p.x + d.x * t, z: p.z + d.z * t }; hit.y = w.heightAt(hit.x, hit.z); }
+    this.net.send({ t: 'act', a: 'ping', x: +hit.x.toFixed(2), y: +hit.y.toFixed(2), z: +hit.z.toFixed(2) });
+  }
+
+  // the world beyond the trees (shared/sim/ambient.js): scenery, never a tell
+  _ambient(e, pos) {
+    const A = this.audio, me = this.player.pos;
+    if (e.kind === 'train') {
+      // the line runs well south of the refuge: always from the same side of the sky
+      A.at('train', { x: me.x + 260, y: me.y + 10, z: me.z + 620 }, { bus: 'amb', gain: 1.5, ref: 500, rolloff: 0.4, reverb: 0.6, occlude: false });
+    } else if (e.kind === 'dog') A.at('farmDog' + (e.s % 2), { x: e.x, y: me.y + 2, z: e.z }, { bus: 'amb', gain: 1.6, ref: 70, rolloff: 0.8, reverb: 0.6, occlude: false });
+    else if (e.kind === 'branch') A.at('branchFall' + (e.s % 2), pos, { bus: 'sfx', gain: 1.5, ref: 12, reverb: 0.35 });
+    else if (e.kind === 'alarm') {
+      const lot = { x: e.x, y: this.world.heightAt(e.x, e.z) + 1, z: e.z };
+      A.stopLoop('alarm'); A.loopAt('alarm', 'carAlarm', lot, { bus: 'amb', gain: 2.2, ref: 60, rolloff: 0.9, reverb: 0.7, occlude: false });
+      this._alarmT = e.dur || 25;
+    }
+  }
+
+  // the handheld from the mast cabinet (subtitles; the sim sends the beats)
+  _radio(id) {
+    const L = {
+      call: [['YOU', 'East Trail, Stinchcomb. We need help out here. There is someone in the trees.', 4200], ['DISPATCH', 'Copy, East Trail. Unit 14 is rolling to the highway bridge. Take the handheld out of the cabinet and keep moving north.', 6200], ['DISPATCH', 'Stay on the trail. Do not stop for anyone you do not know.', 4200]],
+      bridge: [['UNIT 14', 'Fourteen. I am on the bridge with my lights on. I do not see anybody yet.', 5200]],
+      see_light: [['UNIT 14', 'I have a light in the trees. That you? Keep coming.', 4200]],
+      no_light: [['UNIT 14', 'I cannot see you out there. If you have a light, show it.', 4600]],
+      close: [['UNIT 14', 'There you are. Come on. Come on. Do not look back.', 4600]],
+    }[id];
+    if (!L) return;
+    for (const [who, text, ms] of L) this.subs.push({ who, text, ms });
+  }
+
+  _subtitles(dt) {
+    if (this._alarmT > 0) { this._alarmT -= dt; if (this._alarmT <= 0) this.audio.stopLoop('alarm'); }
+    if (this.subT > 0) { this.subT -= dt * 1000; if (this.subT <= 0) this.ui.subtitle(null); return; }
+    const s = this.subs && this.subs.shift();
+    if (!s) return;
+    this.subT = s.ms + 350;
+    if (s.who !== 'YOU') this.audio.ui('radioBlip', 0.35);
+    if (this.settings.subtitles !== false) this.ui.subtitle(s.who, s.text);
+  }
+
+  // a first-time hint (once ever per browser; Settings can bring them back)
+  _hint(id, text, ms = 9000) {
+    if (this.settings.hints === false || this.mode !== 'playing') return false;
+    if (!this.journal.hint(id)) return false;
+    this.ui.hint(text, ms);
+    return true;
+  }
+
+  _hints(dt) {
+    if (this.settings.hints === false || this.ended || this.myState !== 'alive') return;
+    this._hintT -= dt;
+    if (this._hintT > 0) return;
+    this._hintT = 0.5;
+    const pl = this.player, s = this.settings, k = (a) => s.keyName(s.bindings[a]);
+    if (this.sessionT > 12 && this.sessionT < 40 && this._hint('move', this.touch
+      ? 'Left thumb moves (push to the edge to run). Right thumb looks. NOTES opens your map and plan.'
+      : `${k('forward')}${k('left')}${k('back')}${k('right')} move · ${k('sprint')} run · ${k('crouch')} crouch · ${k('flashlight')} lighter · hold ${k('inventory')} for the map and plan`, 10000)) return;
+    if (this.cold > 0.3 && !this.chasing && this._hint('cold', 'The air just went cold. That is the only warning you get that he is somewhere near.')) return;
+    if (this._huntHum() && !this._sawHunt) {
+      this._sawHunt = true;
+      if (this._hint('hunt', 'That low hum means he is hunting you. Do not run. Get out of his sight, crouch behind a trunk or in thick brush, put the lighter out and stay still.', 12000)) return;
+    }
+    if (this.hv.root.visible && this.hv.flags & 128 && this._near(this.hv.pos, 40) && this._canSee({ x: this.hv.pos.x, y: this.hv.pos.y + 1.4, z: this.hv.pos.z })
+      && this._hint('watched', 'He does not move while you are looking at him. He does when you look away.')) return;
+    const b = this.balloons.nearest(pl.pos, 7);
+    if (b && this._canSee({ x: b.x, y: b.y + 1.4, z: b.z }) && this._hint('balloon', 'A balloon. He was standing here. Crouch to pass under it, or untie it. Popped, it is the loudest thing in the refuge.', 10000)) return;
+    if (this.flashlight.battery < 0.3 && this._hint('fuel', 'The lighter is running low. Spare lighters are scattered along the trail. It lasts longer if you put it out when you can see without it.')) return;
+    if (pl.hidden && this.chasing && this.lungs < (this.rules?.lungs || 10) * 0.35 && this.holdingBreath && this._hint('lungs', 'You are nearly out of air. If your lungs empty you will gasp, and he will hear it.')) return;
+  }
+
+  // compass strip: heading, and where the current tasks are (known once the memo is read)
+  _compass(dt) {
+    if (this.settings.compass === false) { this.ui.compass(null); return; }
+    this._compT = (this._compT || 0) - dt;
+    if (this._compT > 0) return;
+    this._compT = 0.05;
+    const pl = this.player, L = this.info.layout, pips = [];
+    const add = (label, x, z) => pips.push({ label, b: Math.atan2(x - pl.pos.x, -(z - pl.pos.z)), d: Math.hypot(x - pl.pos.x, z - pl.pos.z) });
+    if (this.myState === 'alive') {
+      if (!this.notesRead.includes('memo')) { const m = L.items.find((i) => i.id === 'note_memo'); if (m) add('MEMO', m.x, m.z); }
+      else if (this.extractOpen) add('BRIDGE', L.extract.x, L.extract.z);
+      else {
+        const names = { gen: 'GENERATOR', relay: 'RELAY', uplink: 'AERIAL', mast: 'MAST' };
+        for (const s of L.stations) {
+          const v = this.objViews.stations.get(s.id);
+          if (v && v.done) continue;
+          if (s.id === 'mast' && L.stations.some((o) => o.id !== 'mast' && !(this.objViews.stations.get(o.id) || {}).done)) continue;
+          add(names[s.id] || s.id.toUpperCase(), s.x, s.z);
+        }
+      }
+    }
+    this.ui.compass(-pl.yaw, pips);
+  }
+
   // ---------------------------------------------------------------- interaction
   _interact(dt, active) {
     const pl = this.player, inp = this.input, L = this.info.layout;
@@ -970,6 +1131,7 @@ export class Game {
       for (const [id, it] of this.objViews.items) if (!it.held) consider(it.def.x, it.y + 0.1, it.def.z, it.def.wall ? 2.4 : 2.1, { type: 'pickup', id, it });
       for (const [id, s] of this.objViews.stations) if (!s.done) consider(s.def.x, s.def.y + 0.6, s.def.z, 2.5, { type: 'station', id, s });
       for (const a of this.avatars.values()) if (a.state === 1) consider(a.pos.x, a.pos.y + 0.3, a.pos.z, 2.2, { type: 'revive', id: a.id, a });
+      for (const b of this.balloons.items.values()) consider(b.x, b.y + CONFIG.BALLOON.HEIGHT - 0.25, b.z, CONFIG.BALLOON.UNTIE_RANGE - 0.2, { type: 'balloon', id: b.id });
     }
     let prompt = null, prog = null;
     const key = this.touch ? 'USE' : this.settings.keyName(this.settings.bindings.interact);
@@ -993,6 +1155,9 @@ export class Game {
           if (inp.down('interact')) { this.useId = best.id; this._stationNoisy = s.kind !== 'relay'; prog = best.s.prog || 0; this._workSound(dt, s); }
           else if (best.s.prog > 0) prog = best.s.prog;
         }
+      } else if (best.type === 'balloon') {
+        prompt = `<b>${key}</b> Untie the balloon <span class="dim">· quiet · or crouch under it</span>`;
+        if (inp.hit('interact')) this.net.send({ t: 'act', a: 'untie', id: best.id });
       } else if (best.type === 'revive') {
         const row = this.plBufs.get(best.id) && this.plBufs.get(best.id).latest();
         prompt = `Hold <b>${key}</b> to revive ${this._name(best.id)}`;
@@ -1086,6 +1251,8 @@ export class Game {
     if (this._objectivesDirty) { this._objectivesDirty = false; this.ui.objectives(this._activeObjectiveLines()); }
     this.ui.meters(pl.stamina / CONFIG.PLAYER.STAMINA_MAX, this.flashlight.battery, this.flashlight.on);
     this.ui.pebble(Math.max(0,(this.pebbleReadyAt||0)-(this.snapT||0)),this.myState==='alive'&&!pl.covered);
+    this.ui.lungs(this.lungs / (this.rules?.lungs || 10), this.holdingBreath, this.gaspT > 0);
+    this._compass(dt); this._subtitles(dt); this._hints(dt);
     this._teamT = (this._teamT || 0) - dt;
     if (this._teamT <= 0) {
       this._teamT = 0.25;

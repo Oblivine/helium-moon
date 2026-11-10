@@ -81,13 +81,15 @@ function send(c, obj) { c.send(JSON.stringify(obj)); }
 function broadcast(room, obj, except) { const s = JSON.stringify(obj); for (const m of room.members.values()) if (m !== except) m.conn.send(s); }
 
 function lobbyInfo(room) {
-  return { t: 'lobby', code: room.code, state: room.state, host: room.host,
+  return { t: 'lobby', code: room.code, state: room.state, host: room.host, difficulty: room.difficulty || 'ranger',
     players: [...room.members.values()].map((m) => ({ id: m.id, name: m.name, host: m.id === room.host, ready: m.ready })) };
 }
 
-function startGame(room) {
+function startGame(room, difficulty) {
   if (room.timer) clearInterval(room.timer);
-  const sim = new GameSim(world, { seed: (Math.random() * 2 ** 31) | 0, log });
+  // Update 0.9: the host picks the difficulty; a restart keeps it unless the host sends another
+  if (typeof difficulty === 'string' && Object.hasOwn(CONFIG.DIFFICULTY, difficulty)) room.difficulty = difficulty;
+  const sim = new GameSim(world, { seed: (Math.random() * 2 ** 31) | 0, log, difficulty: room.difficulty || 'ranger' });
   for (const m of room.members.values()) sim.addPlayer(m.id, m.name);
   room.sim = sim; room.state = 'game'; room.tick = 0; room.mimicOk = new Map();
   broadcast(room, { t: 'start', info: sim.info() });
@@ -232,8 +234,8 @@ attachWebSocket(server, '/ws', (conn, req) => {
         break;
       }
       case 'leave': leave(member); send(conn, { t: 'lobby_left' }); break;
-      case 'start': if (room && room.host === member.id && room.state !== 'game') startGame(room); break;
-      case 'restart': if (room && room.host === member.id) startGame(room); break;
+      case 'start': if (room && room.host === member.id && room.state !== 'game') startGame(room, m.difficulty); break;
+      case 'restart': if (room && room.host === member.id) startGame(room, m.difficulty); break;
       case 'to_lobby': if (room && room.host === member.id) { if (room.timer) clearInterval(room.timer); room.timer = null; room.sim = null; room.state = 'lobby'; broadcast(room, lobbyInfo(room)); } break;
       case 'in': if (room && room.sim) room.sim.input(member.id, m); break;
       case 'act': if (room && room.sim) room.sim.action(member.id, m); break;

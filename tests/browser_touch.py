@@ -29,6 +29,7 @@ async def play(port):
             assert st['touch'] and st['hasTouch'] and st['q'] == 'low', st
             print('  ok  a touch device gets touch controls and the Low preset:', st, flush=True)
             await page.tap('#menu-main [data-act=single]')
+            await page.tap('#single-go')
             await page.evaluate('game.advance(300, 1/30, false)')
             vis = await page.evaluate("!document.querySelector('#touch').classList.contains('hidden')")
             assert vis

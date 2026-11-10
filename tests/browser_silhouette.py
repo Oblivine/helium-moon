@@ -16,6 +16,7 @@ async def play(port):
             assert not await page.evaluate('window.LOAD_ERROR')
             await page.locator('#loading').wait_for(state='hidden')
             await page.click('#menu-main [data-act=single]')
+            await page.click('#single-go')
             results=await page.evaluate('''async()=>{
                 const THREE=await import('/vendor/three/three.module.js');
                 const {pointAtDistance,makeRng}=await import('/shared/math.js');

@@ -20,6 +20,7 @@ async def play(port):
             assert not await page.evaluate('window.LOAD_ERROR')
             await page.locator('#loading').wait_for(state='hidden')
             await page.click('#menu-main [data-act=single]')
+            await page.click('#single-go')
             for seed,flash in [(2,True),(2,False),(7,True)]:
                 first=await page.evaluate('''async([seed,flash])=>{
                     const random=Math.random;

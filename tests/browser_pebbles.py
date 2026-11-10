@@ -36,6 +36,7 @@ async def play(port):
         try:
             context,page=await load()
             await page.click('#menu-main [data-act=single]')
+            await page.click('#single-go')
             await page.evaluate('''async()=>{
                 const {pointAtDistance}=await import('/shared/math.js');
                 const sim=game.sim,hv=sim.hv,w=game.world,p=sim.players.get(game.myId);

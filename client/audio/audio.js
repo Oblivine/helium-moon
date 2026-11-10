@@ -65,6 +65,10 @@ export class AudioEngine {
     add('hurt', () => S.hurt(9, false)); add('down', () => S.hurt(10, true));
     // real-animal false alarms (wildlife.js)
     for (let i = 0; i < 3; i++) add('swing' + i, () => S.swing(70 + i));
+    // Update 0.9: balloons, the world beyond the trees, ping, radio, held breath
+    for (let i = 0; i < 2; i++) { add('balloonPop' + i, () => S.balloonPop(400 + i)); add('farmDog' + i, () => S.farmDog(410 + i)); add('branchFall' + i, () => S.branchFall(420 + i)); }
+    add('balloonSqueak', () => S.balloonSqueak(430)); add('train', () => S.distantTrain(431)); add('carAlarm', () => S.carAlarmLoop());
+    add('pingTick', () => S.pingTick(432)); add('radioBlip', () => S.radioBlip(433)); add('gasp', () => S.gasp(434));
     add('lighterOn', () => S.lighterStrike(280, true)); add('lighterSpark', () => S.lighterStrike(281, false)); add('lighterOff', () => S.lighterRelease(282));
     // the Puppet: joints, crawl, knuckles, the collapse and the grab
     for (let i = 0; i < 4; i++) { add('pop' + i, () => S.jointPop(200 + i)); add('crawl' + i, () => S.crawlPatter(210 + i)); }
@@ -321,6 +325,8 @@ export class AudioEngine {
     if (!st.inGame) return;
     // breathing (also drives breath-condensation visuals through onExhale)
     const exert = st.exert || 0, fear = st.fear || 0;
+    // holding your breath (Update 0.9): no breath sounds, no condensation, until you let go
+    if (st.holdBreath) { this.breathT = Math.max(this.breathT, 0.25); this.breathIn = true; }
     this.breathT -= dt;
     if (this.breathT <= 0) {
       const mix = S.playerBreathMix(exert, fear, st.downed || 0);
@@ -442,7 +448,7 @@ export class AudioEngine {
   // stop transient game sounds (session end / restart); ambience keeps running
   stopAll() {
     for (const h of [...this.active]) if (!Object.values(this.loops).includes(h)) h.stop(0.2);
-    for (const id of ['gen', 'relay', 'siren']) this.stopLoop(id);
+    for (const id of ['gen', 'relay', 'siren', 'alarm']) this.stopLoop(id);
     this.treeEmitters.clear(); this.treeRefreshAt = 0;
   }
 }
