@@ -155,13 +155,13 @@ export class Props {
     for(const y of [.86,2.24])B.add('woodDark',boxUV(2.4,.075,.10),this.W(o,0,y,.09));
     B.add('wood',boxUV(2.7,.11,.28),this.W(o,0,.78,.14));
     for(const x of [-1.28,1.28])for(const y of [.87,2.23])B.add('bronze',new THREE.SphereGeometry(.022,6,4),this.W(o,x,y,.14));
-    this._arrivalLabel(o,'STINCHCOMB  /  EAST TRAIL',6.8,.43,0,2.75,.08,'#304335','#e8dcc0');
-    this._arrivalLabel(o,'TRAIL MAP  ·  STAFF NOTICES',2.45,.19,0,2.35,.14,'#493e31','#e9dec6');
-    B.add('woodDark',boxUV(1.18,.6,.09),this.W(o,-2.65,1.55,.03));
-    for(const x of [-3.1,-2.2])B.add('bronze',boxUV(.018,1.34,.018),this.W(o,x,2.51,.025));
-    this._arrivalLabel(o,'LEAVE NO TRACE',1.05,.5,-2.65,1.55,.08,'#3c4938','#e1d8bf');
-    for(const z of [.95,3.4])this._arrivalLantern(o,B,z<2?'trailhead-lantern':'trailhead-shelter-light',0,2.95,z,z<2?44:24,9);
-    const mat = patchMaterial(new THREE.MeshStandardMaterial({ map: this._mapBoardTexture(), roughness: .98, envMapIntensity: .15 }), { key: 'kioskmap' });
+    this._arrivalLabel(o,'STINCHCOMB WILDLIFE REFUGE',4.3,.46,0,2.92,.1,'#2c3b30','#e3d6b4',B);
+    for(const x of [-1.9,1.9])B.add('bronze',boxUV(.022,.62,.022),this.W(o,x,3.45,.08));   // hung from the rafters
+    this._arrivalLabel(o,'EAST TRAIL  ·  MAP & NOTICES',2.3,.2,0,2.47,.1,'#43382b','#e3d6b4',B);
+    for(const x of [-3.1,-2.2])B.add('woodDark',boxUV(.09,1.75,.09),this.W(o,x,.87,.03));   // its own two posts, not wires from the roof
+    this._arrivalLabel(o,'LEAVE NO TRACE',1.1,.3,-2.65,1.55,.09,'#33402f','#e1d6b6',B);
+    for(const z of [.95,3.4])this._arrivalLantern(o,B,z<2?'trailhead-lantern':'trailhead-shelter-light',0,z<2?3.3:2.95,z<2?1.5:z,z<2?26:24,9);
+    const mat = patchMaterial(new THREE.MeshStandardMaterial({ map: this._mapBoardTexture(), color: 0xa39d8c, roughness: .98, envMapIntensity: .15 }), { key: 'kioskmap' });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.15), mat);
     m.applyMatrix4(this.W(o, 0, 1.55, 0.065));
     m.receiveShadow = true;
@@ -174,10 +174,29 @@ export class Props {
     B.add(key,boxUV(width,d.length(),width),M(o.x,o.y,o.z,o.rot).multiply(matrix));
   }
 
-  _arrivalLabel(o,text,width,height,x,y,z,bg,fg){
-    const tex=makeTextTexture([{text,font:'bold 64px Georgia, serif'}],{w:1536,h:192,bg,fg,pad:18,border:'#9c9274'});
-    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,height),patchMaterial(new THREE.MeshStandardMaterial({map:tex,roughness:.98,envMapIntensity:.1}),{key:'arrivallabel'}));
-    mesh.applyMatrix4(this.W(o,x,y,z));mesh.receiveShadow=true;this.group.add(mesh);
+  // A routed-timber park sign: a real board with a frame, letters drawn at the board's own
+  // proportions (the old labels stretched one 8:1 texture over every size) and toned down so the
+  // lantern in front of them no longer burns them white.
+  _arrivalLabel(o,text,width,height,x,y,z,bg,fg,B=null){
+    const H=256,Wpx=Math.min(2048,Math.round(H*width/height));
+    const cv=document.createElement('canvas');cv.width=Wpx;cv.height=H;const g=cv.getContext('2d');
+    g.fillStyle=bg;g.fillRect(0,0,Wpx,H);
+    // timber grain and weathering
+    for(let i=0;i<90;i++){g.fillStyle=`rgba(${i%2?255:0},${i%2?250:0},${i%2?230:0},${.018+.03*((i*37)%7)/7})`;g.fillRect(0,(i*53)%H,Wpx,1+(i%3));}
+    const v=g.createLinearGradient(0,0,0,H);v.addColorStop(0,'rgba(0,0,0,.28)');v.addColorStop(.25,'rgba(0,0,0,0)');v.addColorStop(.8,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.34)');
+    g.fillStyle=v;g.fillRect(0,0,Wpx,H);
+    g.strokeStyle=fg;g.globalAlpha=.55;g.lineWidth=5;g.strokeRect(16,16,Wpx-32,H-32);g.globalAlpha=1;
+    let size=128;g.textAlign='center';g.textBaseline='middle';
+    const spaced=text.split('').join(' ');
+    do{g.font=`600 ${size}px "Cormorant Garamond", Georgia, serif`;size-=4;}while(g.measureText(spaced).width>Wpx-90&&size>30);
+    g.fillStyle='rgba(0,0,0,.55)';g.fillText(spaced,Wpx/2+3,H/2+7);       // routed shadow
+    g.fillStyle=fg;g.fillText(spaced,Wpx/2,H/2+3);
+    const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=8;
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,height),patchMaterial(new THREE.MeshStandardMaterial({map:tex,color:0x8f8a7c,roughness:.95,envMapIntensity:.08}),{key:'arrivallabel'}));
+    mesh.applyMatrix4(this.W(o,x,y,z+.012));mesh.receiveShadow=true;this.group.add(mesh);
+    if(B){   // the board it is carved into, proud of whatever is behind it
+      B.add('woodDark',boxUV(width+.1,height+.1,.06),this.W(o,x,y,z-.025));
+    }
   }
 
   _arrivalLantern(o,B,name,x,y,z,intensity,range){
@@ -233,8 +252,8 @@ export class Props {
     }
     B.add('wood',boxUV(5.65,.68,.21),this.W(o,0,3.0,0));
     B.add('roof',boxUV(5.9,.1,.65),this.W(o,0,3.42,0,0,.08));
-    this._arrivalLabel(o,'EAST TRAIL',4.6,.49,0,3.0,.12,'#304335','#e8dcc0');
-    this._arrivalLabel(o,'OLD RIVER ROAD  ·  FOOT ACCESS ONLY',3.5,.20,0,2.55,.12,'#493e31','#dfd4b7');
+    this._arrivalLabel(o,'EAST TRAIL',3.6,.5,0,3.0,.12,'#2c3b30','#e3d6b4');
+    this._arrivalLabel(o,'OLD RIVER ROAD  ·  FOOT ACCESS ONLY',3.4,.2,0,2.52,.12,'#43382b','#dfd4b7',B);
     this._arrivalLantern(o,B,'trailhead-entry-lantern',-2.2,2.55,.27,20,8);
   }
 
@@ -326,21 +345,22 @@ export class Props {
     for (const x of [-0.65, 0.65]) B.add('red', boxUV(0.3, 0.1, 0.04), this.W(o, x, 0.78, -2.36));
   }
 
+  // A timber ranch gate in the shelter's own wood (owner, Nov 10: the red-and-white pipe gate was out
+  // of place and clipped). Posts stand on the ground where they are; the rails run post to post, so
+  // nothing floats or sinks on the slope.
   _gate(o, B) {
-    for (const x of [-2.4, 2.4]) B.add('white', new THREE.CylinderGeometry(0.09, 0.09, 1.5, 10), this.W(o, x, 0.65, 0));
-    const stripes = 8;
-    for (let i = 0; i < stripes; i++) {
-      const L = 4.4 / stripes;
-      const x = -2.2 + L * (i + 0.5);
-      const g = new THREE.CylinderGeometry(0.055, 0.055, L, 10); g.rotateZ(Math.PI / 2);
-      B.add(i % 2 ? 'white' : 'red', g, this.W(o, x, 1.08, 0.12));
-      const g2 = new THREE.CylinderGeometry(0.045, 0.045, L, 8); g2.rotateZ(Math.PI / 2);
-      B.add(i % 2 ? 'white' : 'red', g2, this.W(o, x, 0.55, 0.12));
+    const ground=(x,z)=>{const p=new THREE.Vector3(x,0,z).applyMatrix4(M(o.x,0,o.z,o.rot));return this.world.heightAt(p.x,p.z)-o.y;};
+    const gl=ground(-2.3,0),gr=ground(2.3,0),at=(x)=>gl+(gr-gl)*(x+2.3)/4.6;
+    for(const [x,g] of [[-2.3,gl],[2.3,gr]]){
+      B.add('stone',boxUV(.42,.14,.42),this.W(o,x,g+.05,0));
+      B.add('woodDark',boxUV(.24,1.62,.24),this.W(o,x,g+.74,0));
+      B.add('bronze',boxUV(.3,.05,.3),this.W(o,x,g+1.57,0));
     }
-    const brace = new THREE.CylinderGeometry(0.035, 0.035, 2.0, 8);
-    B.add('red', brace, this.W(o, -1.0, 0.82, 0.12, 0, 0, 1.3));
-    B.add('red', brace, this.W(o, -1.0, 0.82, 0.12, 0, 0, -1.3));
-    B.add('metal', boxUV(0.14, 0.14, 0.12), this.W(o, 2.25, 1.08, 0.12));
+    for(const h of [.42,.8,1.18])this._arrivalBeam(o,B,[-2.2,gl+h,0],[2.2,gr+h,0],h>1?.11:.085,'wood');
+    this._arrivalBeam(o,B,[-2.15,gl+.4,.02],[2.15,gr+1.16,.02],.07,'woodDark');          // brace
+    for(const x of [-1.1,0,1.1])B.add('woodDark',boxUV(.07,.9,.05),this.W(o,x,at(x)+.8,.05));   // battens
+    for(const h of [.5,1.1])B.add('bronze',boxUV(.2,.07,.035),this.W(o,-2.14,gl+h,.075));     // strap hinges
+    B.add('bronze',boxUV(.16,.1,.05),this.W(o,2.14,gr+.82,.08));                              // latch
   }
 
   _sign(o, B) {
