@@ -230,7 +230,7 @@ export const CONFIG = {
   // The refuge is next to farms, a rail line and a highway. Ambient events are scenery, never
   // a tell: they are scheduled on their own random stream and ignore where he is.
   AMBIENT: { TRAIN_FIRST: [150, 420], TRAIN_GAP: [420, 720], DOG_GAP: [170, 380], BRANCH_GAP: [260, 520], BRANCH_DIST: [24, 46],
-    ALARM_CHANCE: 0.5, ALARM_AFTER: 330, ALARM_ALONG: 420, ALARM_TIME: 26 },
+    ALARM_CHANCE: 0.5, ALARM_AFTER: 330, ALARM_ALONG: 420, ALARM_TIME: 16 },
   PING: { RANGE: 45, COOLDOWN: 1.5, LIFE: 7 },
   // Notes scattered per night (the kiosk memo is always there as well)
   NOTES_PER_NIGHT: 4,

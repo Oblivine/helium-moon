@@ -400,9 +400,10 @@ export function carAlarmLoop() {
     const t = i / SR; let f;
     if (t < 2.4) { const u = (t % 0.4) / 0.4; f = 1500 + 1500 * u; }
     else f = (Math.floor((t - 2.4) / 0.3) % 2) ? 2100 : 2700;
-    ph += f / SR; out[i] = (ph % 1 < 0.5 ? 1 : -1) * 0.5 + Math.sin(TAU * ph) * 0.5;
+    ph += f / SR; out[i] = (ph % 1 < 0.5 ? 1 : -1) * 0.15 + Math.sin(TAU * ph) * 0.85;
   }
-  return normalize(filter(out, 'lp', 4200, 0.7, SR), 0.5);
+  // heard from far off: the top end is gone, and it sits low (owner Nov 10: too loud)
+  return normalize(filter(filter(out, 'lp', 2400, 0.7, SR), 'lp', 2400, 0.7, SR), 0.28);
 }
 // co-op ping: two soft taps on wood (quiet, close, nothing like an alarm)
 export function pingTick(seed) {

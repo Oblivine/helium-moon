@@ -1028,7 +1028,7 @@ export class Game {
     else if (e.kind === 'branch') A.at('branchFall' + (e.s % 2), pos, { bus: 'sfx', gain: 1.5, ref: 12, reverb: 0.35 });
     else if (e.kind === 'alarm') {
       const lot = { x: e.x, y: this.world.heightAt(e.x, e.z) + 1, z: e.z };
-      A.stopLoop('alarm'); A.loopAt('alarm', 'carAlarm', lot, { bus: 'amb', gain: 2.2, ref: 60, rolloff: 0.9, reverb: 0.7, occlude: false });
+      A.stopLoop('alarm'); A.loopAt('alarm', 'carAlarm', lot, { bus: 'amb', gain: 0.4, ref: 25, rolloff: 1.2, reverb: 0.8, occlude: false }   // owner Nov 10: was too loud; a distant alarm across the lot);
       this._alarmT = e.dur || 25;
     }
   }
