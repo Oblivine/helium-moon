@@ -1,6 +1,6 @@
 // Objectives, items and notes. Locations are randomised every session.
 import { CONFIG } from '../config.js';
-import { pointAtDistance } from '../math.js';
+import { pointAtDistance, makeRng } from '../math.js';
 import { eyeHeight } from './perception.js';
 
 const REPAIR_STEPS = {
@@ -17,7 +17,15 @@ export const NOTES = [
   { id: 'birder', title: 'Torn page from a birding notebook', text: 'No owls tonight. No frogs. Insects stopped at 9:52 exactly.\nThe air went cold like opening a freezer.\nSomething on the far bank laughing in a voice like a kid sucking on a balloon.\nI am not going back for the scope.' },
   { id: 'camp', title: 'Note pinned to the tent', text: 'MASON - if you find this we went back to the cars.\nTyler says he heard you calling from the woods but it wasn\'t you.\nIt sounded like you but higher. It said what you said at dinner.\nDON\'T ANSWER IT.' },
   { id: 'hunter', title: 'Hunter\'s scrawl', text: 'Saw a skunk the size of a dog in the cattails by the south ponds.\nBlack and white but wrong. Too many eyes.\nSmelled like a struck match. When it stood up the air turned to soup and I couldn\'t tell which way the truck was.\nMy dog won\'t go near the water now.' },
-  { id: 'grandpa', title: 'Scrap of paper', text: 'Helium Moon tonight.\nGrandpa said on those nights you don\'t talk in the woods.\nIt listens. It learns your voice.\nThen it uses it.' },
+  { id: 'grandpa', title: 'Scrap of paper', text: 'Helium Moon tonight.\nGrandpa said on those nights you don\'t talk in the woods.\nIt listens. It learns your voice.\nThen it uses it.' },  // ---- Update 0.9: eight more. Each one is a piece of the story and a lesson somebody paid for.
+  { id: 'balloons', title: 'Volunteer trail report', text: 'Removed four balloons from the East Trail this week. Yellow, on white string, tied off at about head height.\nNobody has reported a party. They are never there on the walk in. They are there on the walk out.\nOne was tied to the bench I had been sitting on.\nWalked into one in the dusk and it went off like a shot. Every bird in the bottoms went quiet.\nI untie them now. Slowly.' },
+  { id: 'breath', title: 'Page from a field notebook', text: 'Night 3. Blind by the pond.\nIt came through at 11:40, walking the way a marionette walks.\nI lay in the reeds with the lamp out. It stopped maybe ten feet off and stood there with its head going side to side.\nI could hear my own breathing. So could it. It turned.\nI held my breath until my ears rang. It waited. Then it went on.\nI do not know what happens if you run out of air first.' },
+  { id: 'dispatch', title: 'County dispatch printout', text: 'CAD 26-10-0447  22:51\nCaller on refuge emergency channel, repeater mast, East Trail.\nStates party of hikers, one separated. States "a man who doesn\'t move when you look."\nCaller advised to proceed north to the highway bridge. Unit 14 en route to bridge, ETA 9.\n22:58  Open line. Breathing. A second voice repeating the caller\'s last words. Higher.\n23:04  Line closed from caller side.' },
+  { id: 'clipping', title: 'Newspaper clipping, May 1974', text: 'HELIUM TANK FOUND IN RIVER BOTTOMS\nRefuge staff clearing the old River Road on Saturday found a welding-supply helium tank, empty, and about forty yards of white string wound around a sycamore.\nTwo night fishermen told this paper they have heard laughing from the far bank "in a voice like a cartoon" on and off since April, always on a bright moon.\n"We figured it was kids," one said. "Kids go home."\nThe tank has not been claimed.' },
+  { id: 'kids', title: 'Folded notebook paper', text: 'RULES (Danny made these)\n1. If you see him you have to keep looking. He only moves when nobody looks.\n2. No flashlights. He sees light from all the way across the water.\n3. If he is looking for you get LOW and get behind something and dont move.\n4. Throw a rock the other way. He goes to see.\n5. Dont talk. Dont even breathe loud.\n6. If he grabs you thats one. You only get three.' },
+  { id: 'sf6', title: 'Lab label, water-stained', text: 'SULFUR HEXAFLUORIDE  SF6\nCylinder 6 of 6. Property of the university. Do not vent.\nHandwritten underneath:\nFive times heavier than air. It pools in the low ground by the ponds.\nBreathe helium and your voice goes up. Breathe this and it goes down.\nSomething has been living in the low ground.\nIt does not sound like an animal.' },
+  { id: 'lighter', title: 'Receipt with writing on the back', text: 'QuikTrip #0912  1 BIC LIGHTER  1.89\nOn the back, in pencil:\nFlashlight died at the pump house. All I have is this.\nIt lights about as far as I can spit. Good. Anything brighter and he comes.\nWhen he ran at me the flame went sideways like something was pulling the air.\nWhen he had hold of me it went out by itself.' },
+  { id: 'puppet', title: 'Torn sketchbook page', text: 'A pencil drawing of a man seen from behind, arms hanging, heels off the ground.\nUnderneath:\nHe stands like something is holding him up by the back of the neck.\nWatched him for a full minute from the overlook. He did not sway. People sway.\nI looked down to turn the page.\nHe was at the next tree. Same pose. Closer.' },
 ];
 
 export class Objectives {
@@ -96,7 +104,11 @@ export class Objectives {
     const kiosk = w.structures.find((o) => o.type === 'kiosk');
     const kp = stationAt('kiosk', 0, 0.45);
     this.items.push({ id: 'note_memo', kind: 'note', note: 'memo', name: NOTES[0].title, x: kp.x, z: kp.z, y: kp.y + 1.2, rot: kiosk.rot, holder: null, wall: true });
-    const others = rng.shuffle(NOTES.slice(1)).slice(0, 3);
+    // Update 0.9: 13 notes, NOTES_PER_NIGHT scattered. The main stream is consumed exactly as it
+    // was with five (seeded sessions keep their layouts); the choice uses its own stream.
+    rng.shuffle(NOTES.slice(1, 6));
+    const noteRng = makeRng((this.sim.seed ^ 0x4e07e5) >>> 0);
+    const others = noteRng.shuffle(NOTES.slice(1)).slice(0, CONFIG.NOTES_PER_NIGHT);
     for (const n of others) { const s = (n.id === 'camp' && take((s) => s.label === 'camp',false)) || take(() => true); if (s) this.items.push({ id: 'note_' + n.id, kind: 'note', note: n.id, name: n.id==='camp'&&s.label!=='camp'?'Crumpled campsite note':n.title, ...s, holder: null }); }
     this.team = { fuel: false, fuse: false, crank:false };
     this.notesRead = [];

@@ -203,6 +203,38 @@ export const CONFIG = {
     PRESENCE_SAFE: [12, 4],  // s of safety before he deliberately comes closer
     VOCAL_MUL: [2, 3.5],
   },
+  // ================================================================ Update 0.9 "The Long Night"
+  // Difficulty (host's choice; default ranger = the owner's tuned rules). health: grabs you can
+  // take; chaseCooldown: multiplier on the post-hunt cooldown; search: multiplier on his search
+  // time; fuel: lighter fuel multiplier; breathHear: metres at which he hears a hiding player
+  // breathe during a search; lungs: seconds you can hold your breath.
+  DIFFICULTY: {
+    visitor: { label: 'Visitor', blurb: 'A gentler night. Four grabs, longer quiet between hunts.', health: 4, chaseCooldown: 1.25, search: 0.8, fuel: 1.4, breathHear: 3.2, lungs: 13 },
+    ranger: { label: 'Ranger', blurb: 'The night as it was meant to be.', health: 3, chaseCooldown: 1, search: 1, fuel: 1, breathHear: 4.5, lungs: 10 },
+    moon: { label: 'Helium Moon', blurb: 'Two grabs. He comes back sooner, searches longer and hears better.', health: 2, chaseCooldown: 0.72, search: 1.2, fuel: 0.75, breathHear: 5.5, lungs: 8 },
+  },
+  // Hold your breath: during his search, a concealed player within rules.breathHear of him who
+  // is breathing for GRACE s (cumulative; drains at the same rate when out of range or holding)
+  // is heard: he walks to within ERROR m of where they are. Holding is client-owned like stamina:
+  // lungs drain 1/s, refill at REFILL/s after REFILL_DELAY; emptied lungs force a GASP s gasp
+  // (audible to him out to GASP_HEAR). CLOSE_PASS: a search pass this near counts for the report.
+  BREATH: { GRACE: 1.6, ERROR: 1.2, REFILL: 0.7, REFILL_DELAY: 1.0, GASP: 2.2, GASP_HEAR: 14, CLOSE_PASS: 3.2 },
+  // Balloons: his calling cards. OMEN: one appears beside the trail ahead during the dread
+  // period. After that he leaves one where a player watched him stand, and where he gave up a
+  // hunt (placed only once nobody can see the spot and he has moved MARK_CLEAR m away; a mark
+  // waits at most MARK_WAIT s). MAX at once; never within MIN_GAP m of another or in spawn.
+  // An upright player within POP_RADIUS pops it (crouch to pass under); a pebble landing within
+  // PEBBLE_RADIUS pops it; E unties it silently. A pop is heard by him out to POP_HEAR.
+  BALLOON: { MAX: 7, HEIGHT: 1.5, OMEN_AT: [70, 130], OMEN_AHEAD: [55, 95], OMEN_OFF: [1.6, 2.6], MARK_CLEAR: 9, MARK_WAIT: 90, MIN_GAP: 14,
+    POP_RADIUS: 0.5, PEBBLE_RADIUS: 1.1, POP_HEAR: 45, UNTIE_RANGE: 2.4 },
+  // The refuge is next to farms, a rail line and a highway. Ambient events are scenery, never
+  // a tell: they are scheduled on their own random stream and ignore where he is.
+  AMBIENT: { TRAIN_FIRST: [150, 420], TRAIN_GAP: [420, 720], DOG_GAP: [170, 380], BRANCH_GAP: [260, 520], BRANCH_DIST: [24, 46],
+    ALARM_CHANCE: 0.5, ALARM_AFTER: 330, ALARM_ALONG: 420, ALARM_TIME: 26 },
+  PING: { RANGE: 45, COOLDOWN: 1.5, LIFE: 7 },
+  // Notes scattered per night (the kiosk memo is always there as well)
+  NOTES_PER_NIGHT: 4,
+
   SESSION: {
     INTRO_TIME: 9,
     REVIVE_TIME: 4.5, DOWNED_BLEEDOUT: 50,

@@ -66,7 +66,7 @@ export class Director {
     if (!playerActive(p) || p.state !== 'alive') return false;
     if (t < this.nextChaseAt || this.sim.hv?.withdrawal) return false;
     if (this.phase === 'relax' || this.sim.state === 'intro' || this.inDread()) return false;
-    const baseGap = this._esc(this.D.CHASE_COOLDOWN) * this.chaseGapMul;
+    const baseGap = this._esc(this.D.CHASE_COOLDOWN) * this.chaseGapMul * (this.sim.rules?.chaseCooldown ?? 1);
     const chaseGap = baseGap;
     if (t - this.lastChase < chaseGap || t - this.lastAttack < this._esc(this.D.ATTACK_COOLDOWN)) return false;
     return true;
@@ -104,7 +104,7 @@ export class Director {
   }
   onChaseEnd(caught) {
     this.chasing = false; this.lastChaseEnd = this.sim.time;
-    this.nextChaseAt = this.sim.time + this.D.POST_CHASE_COOLDOWN;
+    this.nextChaseAt = this.sim.time + this.D.POST_CHASE_COOLDOWN * (this.sim.rules?.chaseCooldown ?? 1);
     this.huntDueAt = 0;
     const hv=this.sim.hv;
     hv?.beginWithdrawal?.(this.sim.players.get(hv.target));

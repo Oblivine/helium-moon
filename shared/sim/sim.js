@@ -13,12 +13,18 @@ import { Director } from './director.js';
 import { Objectives } from './objectives.js';
 import { MimicDirector } from './mimic.js';
 import { Wildlife } from './wildlife.js';
+import { Balloons } from './balloons.js';
+import { Ambient } from './ambient.js';
+import { NightStats } from './stats.js';
 
 const PSTATE = ['alive', 'downed', 'dead', 'escaped'];
 
 export class GameSim {
-  constructor(world, { seed = (Math.random() * 2 ** 31) | 0, log = () => {} } = {}) {
+  constructor(world, { seed = (Math.random() * 2 ** 31) | 0, log = () => {}, difficulty = 'ranger' } = {}) {
     this.world = world; this.seed = seed; this.log = log;
+    // Update 0.9: the host's difficulty. 'ranger' is the owner's tuned default.
+    const diff = CONFIG.DIFFICULTY[difficulty] ? difficulty : 'ranger';
+    this.rules = { id: diff, ...CONFIG.DIFFICULTY[diff] };
     this.rng = makeRng(seed);
     this.time = 0; this.state = 'intro';
     this.players = new Map(); this.playerList = [];
@@ -31,6 +37,10 @@ export class GameSim {
     this.sf = new SkunkAI(this); this.sf.spawn();
     this.mimic = new MimicDirector(this);
     this.wildlife = new Wildlife(this);
+    this.balloons = new Balloons(this);
+    this.ambient = new Ambient(this);
+    this.stats = new NightStats(this);
+    this.radio = { step: 0, at: 0 };
     this.dev = null;   // Developer mode options (shared/sim/dev.js), set by a local client
     this.result = null;
   }
@@ -64,7 +74,7 @@ export class GameSim {
     const sp = this.spawnPoint(this.players.size);
     const p = {
       id, name: String(name || 'Visitor').slice(0, 20), ...sp, pitch: 0, crouch: false, sprint: false, flash: true,
-      noise: 0, voice: 0, use: null, revive: null, hidden: false, covered: false, health: CONFIG.PLAYER.MAX_HEALTH, state: 'alive',
+      noise: 0, voice: 0, use: null, revive: null, hidden: false, covered: false, breath: false, health: this.rules.health, state: 'alive',
       bleedT: 0, reviveT: 0, hurtT: -999, quietT: 0, moveDir: null, lastX: sp.x, lastZ: sp.z, escapeT: 0, interactNoise: false,
       pebbleReadyAt:0,paused:false,
     };
@@ -101,6 +111,7 @@ export class GameSim {
     p.voice = Math.min(1, Math.max(0, +m.voice || 0));
     p.hidden = !!m.hidden; p.covered = !!m.covered && this.obj.items.some((it) => it.kind === 'blanket' && it.holder === p.id);
     p.paused=!!m.paused;
+    p.breath = !!m.breath && p.crouch && p.state === 'alive';   // holding their breath (client-owned lungs)
     if(p.covered)p.lean=0;
     p.use = typeof m.use === 'string' ? m.use : null;
     p.revive = m.revive != null ? m.revive : null;
@@ -112,6 +123,8 @@ export class GameSim {
     if(a.a==='pebble')this.throwPebble(p,a);
     else if (a.a === 'pickup' && p.state === 'alive') this.obj.pickup(p, a.id);
     else if (a.a === 'dial') this.obj.turn(p,a.id);
+    else if (a.a === 'untie') this.balloons.untie(p, a.id);
+    else if (a.a === 'ping') this.ping(p, a);
     else if (a.a === 'phrase') this.mimic.addPhrase(id, a.id, +a.dur);
     else if (a.a === 'phrase_drop') this.mimic.dropPhrase(id, a.id);
     else if (a.a === 'mimic_off') this.mimic.clear(id);
@@ -121,6 +134,17 @@ export class GameSim {
     let best = null, bd = 1e9;
     for (const p of this.playerList) { if (p.state !== 'alive' && p.state !== 'downed') continue; const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = p; } }
     return best ? { p: best, d: bd } : null;
+  }
+
+  // co-op ping: a mark on the ground for the team (validated: near the player, rate-limited)
+  ping(p, a) {
+    const G = CONFIG.PING;
+    if (p.state !== 'alive' && p.state !== 'downed') return false;
+    if (![a.x, a.y, a.z].every(Number.isFinite) || this.time < (p.pingAt || 0)) return false;
+    if (Math.hypot(a.x - p.x, a.z - p.z) > G.RANGE || Math.abs(a.y - p.y) > 25) return false;
+    p.pingAt = this.time + G.COOLDOWN;
+    this.emit({ type: 'ping', pid: p.id, x: +a.x.toFixed(2), y: +a.y.toFixed(2), z: +a.z.toFixed(2) });
+    return true;
   }
 
   throwPebble(p,aim){
@@ -150,13 +174,14 @@ export class GameSim {
       if(this.time<pebble.startedAt+pebble.duration){pending.push(pebble);continue;}
       if(!pebble.hit)continue;
       const at=pebble.impact,distracted=this.hv.hearPebble(at);
+      this.balloons.pebble(at, pebble.pid);
       this.emit({type:'pebble_impact',id:pebble.id,pid:pebble.pid,...at,kind:pebble.kind,distracted});
     }
     this.pebbles=pending;
   }
 
   // Event ordering is separate from item/station IDs consumed by the client.
-  emit(ev) { ev.seq = this.evSeq++; ev.t = +this.time.toFixed(2); this.events.push(ev); }
+  emit(ev) { ev.seq = this.evSeq++; ev.t = +this.time.toFixed(2); this.events.push(ev); this.stats?.onEvent(ev); }
   drainEvents() { const e = this.events; this.events = []; return e; }
 
   addGas(x, y, z) {
@@ -207,6 +232,10 @@ export class GameSim {
       this.sf.update(dt);
       this.mimic.update(dt);
       this.wildlife.update(dt);
+      this.balloons.update(dt);
+      this.ambient.update(dt);
+      this.stats.update(dt);
+      this.updateRadio();
     }
     for (const g of this.gas) { g.age += dt; }
     this.gas = this.gas.filter((g) => g.age < g.life);
@@ -230,6 +259,20 @@ export class GameSim {
         if (p.bleedT <= 0) { p.state = 'dead'; this.emit({ type: 'dead', pid: p.id }); this.checkOutcome(); }
       }
     }
+  }
+
+  // The handheld from the mast cabinet: the county unit talks you in (subtitle beats; the
+  // client owns the words). Timed from the distress call, then by distance to the bridge.
+  updateRadio() {
+    if (this.state !== 'extract') return;
+    const r = this.radio, ex = this.obj.extract;
+    if (r.step === 0) { r.step = 1; r.at = this.time; this.emit({ type: 'radio', id: 'call' }); return; }
+    const alive = this.playerList.filter((p) => p.state === 'alive');
+    if (!alive.length) return;
+    const near = Math.min(...alive.map((p) => Math.hypot(p.x - ex.x, p.z - ex.z)));
+    if (r.step === 1 && this.time - r.at > 55) { r.step = 2; r.at = this.time; this.emit({ type: 'radio', id: 'bridge' }); }
+    else if (r.step === 2 && near < 150 && this.time - r.at > 12) { r.step = 3; r.at = this.time; this.emit({ type: 'radio', id: alive.some((p) => p.flash) ? 'see_light' : 'no_light' }); }
+    else if (r.step === 3 && near < 45 && this.time - r.at > 8) { r.step = 4; this.emit({ type: 'radio', id: 'close' }); }
   }
 
   updateExtraction(dt) {
@@ -258,7 +301,8 @@ export class GameSim {
     this.state = result;
     this.result = {
       result, time: Math.round(this.time),
-      objectives: this.obj.doneCount(), notes: this.obj.notesRead.length,
+      objectives: this.obj.doneCount(), objectivesTotal: this.obj.stations.length, notes: this.obj.notesRead.length,
+      difficulty: this.rules.id, stats: this.stats.summary(),
       players: this.playerList.map((p) => ({ id: p.id, name: p.name, state: p.state })),
     };
     this.emit({ type: 'end', ...this.result });
@@ -274,12 +318,12 @@ export class GameSim {
       hv: this.hv.snapshot(), sf: this.sf.snapshot(),
       gas: this.gas.map((g) => [+g.x.toFixed(1), +g.y.toFixed(1), +g.z.toFixed(1), g.r, +(1 - g.age / g.life).toFixed(2)]),
       pebbles:this.pebbles.map(p=>({id:p.id,pid:p.pid,flight:p.flight,duration:p.duration,startedAt:p.startedAt,readyAt:p.readyAt})),
-      obj: this.obj.snapshot(), ph: this.director.phase,
+      obj: this.obj.snapshot(), ph: this.director.phase, bl: this.balloons.snapshot(),
     };
   }
 
   info() {
-    return { seed: this.seed, layout: this.obj.layout(), players: this.playerList.map((p) => ({ id: p.id, name: p.name })) };
+    return { seed: this.seed, rules: this.rules, layout: this.obj.layout(), players: this.playerList.map((p) => ({ id: p.id, name: p.name })) };
   }
 }
 

@@ -61,7 +61,7 @@ export class HeliumVoiceAI {
     if (s === 'chase') {
       this.huntStartedAt = this.sim.time;
       this.huntHideUntil = this.sim.time + this.rng.range(...C.HUNT_HIDE_WINDOW);
-      this.huntEndsAt = this.huntHideUntil + this.rng.range(...C.HUNT_SEARCH_TIME);
+      this.huntEndsAt = this.huntHideUntil + this.rng.range(...C.HUNT_SEARCH_TIME) * (this.sim.rules?.search ?? 1);
       this.huntPhase = 'stalk'; this.huntContactAt = -999; this.huntHeardAt = this.sim.time;
       this.huntSearchGoal = null; this.stalkBackingOff = false;
     } else this.huntPhase = null;
@@ -504,6 +504,7 @@ export class HeliumVoiceAI {
         this.reveal.exposureT = (this.reveal.exposureT || 0) + dt;
         if (!this.reveal.counted && this.reveal.exposureT >= .2) {
           this.reveal.counted = true; dir.onReveal(this.reveal.kind); this.presenceReportT = sim.time;
+          sim.balloons?.mark(this.x, this.z, 'watched');   // his calling card, left once nobody is looking
         }
       }
       if(sim.time>=this.scareVisibleUntil || (deliberate?.kind==='shadow' && deliberate.exposureT>=.2)){
@@ -719,6 +720,7 @@ export class HeliumVoiceAI {
           this.huntSearchGoal = null; this.replanT = 0;
         }
         const contact = !concealed && sim.time - (this.huntContactAt ?? -999) < C.HUNT_CONTACT_MEMORY;
+        if (concealed) this.listenForBreath(dt, tp); else this.breathHeard = 0;
         if (!contact) {
           this.updateHuntSearch(dt, tp);
           break;
@@ -1057,6 +1059,34 @@ export class HeliumVoiceAI {
     this.lookYaw = this.yaw + Math.sin(this.sim.time * .85) * .8;
   }
 
+  // Update 0.9 "hold your breath": searching within earshot of a concealed player who is
+  // breathing, he notices after BREATH.GRACE s and walks to (about) where they are. Holding
+  // their breath, or being further than rules.breathHear, lets it drain away again.
+  listenForBreath(dt, tp) {
+    const B = CONFIG.BREATH, sim = this.sim, d = this.dist(tp), hear = sim.rules?.breathHear ?? 4.5;
+    // for the night report: a search pass this close to a hidden player
+    if (d < B.CLOSE_PASS) { if (!this.closePass) { this.closePass = true; sim.emit({ type: 'hv_close_pass', pid: tp.id }); } }
+    else if (d > B.CLOSE_PASS + 3) this.closePass = false;
+    if (d < hear && !tp.breath) this.breathHeard = (this.breathHeard || 0) + dt;
+    else this.breathHeard = Math.max(0, (this.breathHeard || 0) - dt);
+    if (this.breathHeard < B.GRACE) return;
+    this.breathHeard = 0;
+    const e = B.ERROR;
+    this.pebbleDecoy = null;
+    this.lastSeenChase = { x: tp.x + this.rng.range(-e, e), z: tp.z + this.rng.range(-e, e), t: sim.time };
+    this.huntSearchGoal = null; this.huntSearchedAt = -Infinity; this.replanT = 0; this.path = null;
+    sim.emit({ type: 'hv_heard', what: 'breath', pid: tp.id });
+  }
+
+  // A loud noise in the world (a popped balloon): he hears where it came from. `pid` is who
+  // caused it, so a hunt on that player takes it as evidence of them.
+  hearNoise(x, z, radius, pid = null) {
+    const d = Math.hypot(x - this.x, z - this.z);
+    if (d > radius || !this.outsideSpawn(x, z)) return false;
+    this.stimulus = { x, z, t: this.sim.time, loud: 1 - d / radius, pid, voice: false };
+    return true;
+  }
+
   finishHunt(tp, reason = 'timeout') {
     if (this.grab) {
       const kind = this.grab.kind;
@@ -1065,6 +1095,8 @@ export class HeliumVoiceAI {
     }
     const caught = reason === 'grab';
     const hidden = !caught && tp && this.hidden(tp);
+    if (!caught) this.sim.balloons?.mark(this.x, this.z, 'gave_up');
+    this.breathHeard = 0; this.closePass = false;
     if (tp && playerActive(tp)) {
       tp.hideGraceUntil = this.sim.time + C.HIDE_GRACE[this.sim.playerList.filter(playerActive).length <= 1 ? 0 : 1];
       if (hidden) {
