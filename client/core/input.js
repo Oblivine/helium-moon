@@ -37,6 +37,7 @@ export class Input {
   }
 
   requestLock() {
+    if (this.noLock) return;   // touch screens: look is a drag, never pointer lock
     try {
       const p = this.canvas.requestPointerLock && this.canvas.requestPointerLock({ unadjustedMovement: false });
       if (p && p.catch) p.catch(() => { this.lockFailed = true; this.dragLook = true; });

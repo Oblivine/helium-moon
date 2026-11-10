@@ -26,6 +26,14 @@ function flameTexture() {
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+function glowTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d'), grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,190,110,0.55)'); grd.addColorStop(0.35, 'rgba(255,150,60,0.18)'); grd.addColorStop(1, 'rgba(255,120,30,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
 export class Flashlight {
   constructor(scene, preset, camera = null) {
     // omni: lights all round you, falls off within RANGE m (no cone, no beam, no cookie)
@@ -42,16 +50,20 @@ export class Flashlight {
     this._off = new THREE.Vector3(); this._q = new THREE.Quaternion(); this._last = new THREE.Vector3();
     // the view model: a small plastic lighter low in the right hand, flame on top
     const m = this.model = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.068, 0.012), new THREE.MeshStandardMaterial({ color: 0x8c1b14, roughness: 0.45 }));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.068, 0.012), this.bodyMat = new THREE.MeshBasicMaterial({ color: 0x8c1b14 }));
     m.add(body);
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, 0.011), new THREE.MeshStandardMaterial({ color: 0xa8a8ac, roughness: 0.35, metalness: 0.8 }));
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, 0.011), this.guardMat = new THREE.MeshBasicMaterial({ color: 0xa8a8ac }));
     guard.position.y = 0.04; m.add(guard);
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.009, 10), new THREE.MeshStandardMaterial({ color: 0x3a3a3c, roughness: 0.6, metalness: 0.7 }));
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.009, 10), new THREE.MeshBasicMaterial({ color: 0x18181a }));
     wheel.rotation.z = Math.PI / 2; wheel.position.set(0, 0.047, -0.004); m.add(wheel);
     const fl = this.flameSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-    fl.material.color.setScalar(0.6);   // keep the flame from blooming into a block of light
+    fl.material.color.setScalar(0.5);
     fl.center.set(0.5, 0.05); fl.position.set(0, 0.05, 0); fl.scale.set(0.014, 0.03, 1); fl.renderOrder = 10;
     m.add(fl);
+    // The view model is unlit (Update 0.9): the flame's point light sits a few centimetres from it,
+    // and lit metal that close blew out into a bright square of bloom. Its brightness follows the flame.
+    const glow = this.glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false }));
+    glow.position.set(0, 0.062, 0); glow.scale.set(0.09, 0.09, 1); glow.renderOrder = 9; m.add(glow);
     m.traverse((o) => { o.frustumCulled = false; });
     if (camera) { camera.add(m); m.position.set(0.16, -0.15, -0.3); m.rotation.set(0.12, -0.25, 0.05); }
     else scene.add(m);
@@ -113,6 +125,9 @@ export class Flashlight {
     s.scale.set(0.014 * (0.8 + 0.2 * this.flame), Math.max(0.006, h * 0.88), 1);
     s.material.rotation = -0.5 * this.lean + 0.06 * Math.sin(t * 9);
     s.material.opacity = this.spark > 0 && this.flame < 0.05 ? 0.9 : clamp(this.flame * 1.1, 0, 1);
+    const lv = 0.035 + 0.5 * this.flame * fuel;   // the lighter itself: barely visible unlit, warm when lit
+    this.bodyMat.color.setRGB(0.55 * lv, 0.1 * lv, 0.08 * lv); this.guardMat.color.setRGB(0.66 * lv, 0.6 * lv, 0.5 * lv);
+    this.glowSprite.visible = this.flame > 0.03; this.glowSprite.material.opacity = clamp(this.flame * 0.8, 0, 1);
     this.model.visible = !opts.off;
   }
 }

@@ -3,13 +3,20 @@ import * as THREE from 'three';
 import { Settings } from './core/settings.js';
 import { UI } from './ui/ui.js';
 import { Game } from './game/game.js';
+import { isTouchDevice } from './ui/touch.js';
 
 const params = new URLSearchParams(location.search);
 const settings = Settings.load();
+// Phones and tablets (Update 0.9): touch controls, and Low quality unless the player picked one.
+const touch = params.get('touch') === '1' || settings.touchControls === 'on' || (settings.touchControls !== 'off' && params.get('touch') !== '0' && isTouchDevice());
+if (touch) {
+  document.documentElement.classList.add('touch');
+  if (!settings.qualityChosen) { settings.quality = 'low'; settings.renderScale = Math.min(settings.renderScale, 0.8); }
+}
 if (params.get('q')) settings.quality = params.get('q');
 if (params.get('msaa') !== null) settings.preset.msaa = +params.get('msaa');   // test/debug override
 const ui = new UI(settings);
-const game = new Game(document.getElementById('game'), settings, ui, { manual: params.get('manual') === '1', debug: params.get('debug') === '1' });
+const game = new Game(document.getElementById('game'), settings, ui, { manual: params.get('manual') === '1', debug: params.get('debug') === '1', touch });
 ui.bind(game);
 window.game = game; window.ui = ui; window.THREE = THREE;
 

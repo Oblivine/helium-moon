@@ -20,6 +20,7 @@ import { Flashlight } from './flashlight.js';
 import { BreathFX, AnomalyFX } from './effects.js';
 import { PebbleViews } from './pebbles.js';
 import { Input } from '../core/input.js';
+import { TouchControls } from '../ui/touch.js';
 import { AudioEngine } from '../audio/audio.js';
 import { VoiceSystem } from '../audio/voice.js';
 import { LocalTransport } from '../net/transport.js';
@@ -94,6 +95,11 @@ export class Game {
     }
     this.input = new Input(this.canvas, set);
     this.input.onLockChange = (locked) => this._onLockChange(locked);
+    if (this.opts.touch) {
+      // no pointer lock on phones: look is a drag on the right half of the screen
+      this.input.dragLook = true; this.input.lockFailed = true; this.input.noLock = true;
+      this.touch = new TouchControls(this.input, set);
+    }
     this.propMats = makePropMaterials(bank.tex);
     this.objViews = new ObjectiveViews(this.scene, this.propMats);
     this.breath = new BreathFX(this.scene);
@@ -252,6 +258,7 @@ export class Game {
     this.ui.intro();
     this.input.enabled = true;
     if (!this.input.locked) { this.input.requestLock(); this.ui.clickToPlay(!this.input.locked && !this.input.dragLook); }
+    if (this.touch) { this.touch.reset(); try { const el = document.documentElement; if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); } catch (e) { /* not allowed here */ } }
     this._objectivesDirty = true;
   }
 
@@ -734,6 +741,10 @@ export class Game {
         crouch: pl.crouching, sprint: pl.sprinting, flash: fl.on && fl.light.intensity > 1, noise: +(pl.noise + (this.useId && this._stationNoisy ? 0.6 : 0)).toFixed(2),
         voice: +this.voice.voiceLevel.toFixed(2), hidden: pl.hidden, covered: pl.covered, paused:this.paused, use: this.useId || null, revive: this.reviveId || null });
     }
+    if (this.touch) {
+      this.touch.setVisible(active && this.myState !== 'dead' && this.myState !== 'escaped');
+      this.touch.state({ blanket: !!pl.hasCamoBlanket, ping: !!(this.net && this.net.networked), breath: pl.crouching && pl.speed < 0.6, use: this.ui._prompt });
+    }
     // ---- HUD
     this._fade(dt);
     this._hud(dt);
@@ -961,7 +972,7 @@ export class Game {
       for (const a of this.avatars.values()) if (a.state === 1) consider(a.pos.x, a.pos.y + 0.3, a.pos.z, 2.2, { type: 'revive', id: a.id, a });
     }
     let prompt = null, prog = null;
-    const key = this.settings.keyName(this.settings.bindings.interact);
+    const key = this.touch ? 'USE' : this.settings.keyName(this.settings.bindings.interact);
     if (best) {
       if (best.type === 'pickup') {
         const it = best.it.def;
@@ -1114,7 +1125,8 @@ export class Game {
   _render(dt) {
     const env = this.env, fl = this.flashlight, ml = env.moonLight;
     const gas = this._gasU || [];
-    this.renderer.exposure = this.mode === 'playing' || this.mode === 'ended' ? this.exposure : 1;
+    const bright = this.settings.brightness || 1;
+    this.renderer.exposure = (this.mode === 'playing' || this.mode === 'ended' ? this.exposure : 1) * bright;
     this.renderer.render(this.scene, this.camera, (u) => {
       u.tFrost.value = this.bank.tex.frost;
       const sm = ml.shadow && ml.shadow.map;
@@ -1127,7 +1139,7 @@ export class Game {
       u.uFlashI.value = 0;   // no beam in the haze: it's a lighter
       u.uFlashRange.value = fl.light.distance;
       const playing = this.mode === 'playing' || this.mode === 'ended';
-      u.uExposure.value = playing ? this.exposure : 1;
+      u.uExposure.value = (playing ? this.exposure : 1) * bright;
       u.uTerrorFx.value = 0; u.uCold.value = this.cold; u.uFear.value = 0;
       u.uHeart.value = 0;
       u.uDamage.value = this.damage; u.uDowned.value = playing ? this.player.downed : 0;

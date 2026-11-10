@@ -179,6 +179,8 @@ export class UI {
         <p class="hint">Render scale and volumetrics update immediately. Reload after changing quality to apply forest density and all shadow settings.</p>
         ${slider('renderScale', 'Render scale', 0.5, 1, 0.05, (v) => Math.round(v * 100) + '%')}
         ${check('adaptiveRes', 'Adaptive resolution')}
+        ${slider('brightness', 'Brightness', 0.6, 2, 0.05, (v) => Math.round(v * 100) + '%')}
+        <p class="hint">Set it so the trail ahead is only just visible with the lighter out. The night is meant to be dark.</p>
         ${slider('fov', 'Field of view', 60, 100, 1, (v) => v + '°')}
         ${slider('headBob', 'Head bob', 0, 1, 0.05, (v) => Math.round(v * 100) + '%')}
         ${slider('cameraShake', 'Motion effects (shake, warp)', 0, 1, 0.05, (v) => Math.round(v * 100) + '%')}
@@ -223,6 +225,7 @@ export class UI {
     el.oninput = (e) => {
       const k = e.target.dataset.k; if (!k) return;
       let v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value;
+      if (k === 'quality') s.qualityChosen = true;
       s[k] = v; s.save();
       const out = e.target.parentElement.querySelector('output'); if (out) out.textContent = e.target.closest('label').querySelector('output') ? this._fmt(k, v) : '';
       if (k === 'mimicOptIn' && !v) this.toast('Voice mimicry off — stored phrases deleted.', 3000);
@@ -232,7 +235,7 @@ export class UI {
   }
 
   _fmt(k, v) {
-    if (['renderScale', 'headBob', 'cameraShake', 'filmGrain', 'micSensitivity'].includes(k)) return Math.round(v * 100) + '%';
+    if (['renderScale', 'headBob', 'cameraShake', 'filmGrain', 'micSensitivity', 'brightness'].includes(k)) return Math.round(v * 100) + '%';
     if (k === 'fov') return v + '°';
     if (k.endsWith('Volume')) return Math.round(v * 100);
     if (k === 'sensitivity') return (+v).toFixed(2);

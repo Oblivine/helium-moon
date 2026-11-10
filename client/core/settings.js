@@ -10,6 +10,7 @@ export const DEFAULT_BINDINGS = {
   leanLeft: 'KeyQ', leanRight: 'KeyR',
   camouflage: 'KeyX',
   pebble: 'KeyG',
+  ping: 'KeyZ',
 };
 
 export const BINDING_LABELS = {
@@ -19,12 +20,15 @@ export const BINDING_LABELS = {
   leanLeft: 'Lean left', leanRight: 'Lean right',
   camouflage: 'Use camouflage blanket',
   pebble: 'Throw a pebble (search distraction)',
+  ping: 'Ping a spot for your team',
 };
 
 const DEFAULTS = {
   quality: 'high', renderScale: 1.0, sensitivity: 1.0, invertY: false, fov: 72,
   masterVolume: 0.9, sfxVolume: 1.0, ambienceVolume: 1.0, voiceVolume: 1.0,
   headBob: 1.0, cameraShake: 1.0, filmGrain: 1.0, showFps: false, adaptiveRes: true,
+  // Update 0.9
+  brightness: 1.0, compass: true, hints: true, touchControls: 'auto', difficulty: 'ranger', subtitles: true,
   playerName: '', serverUrl: '', bindings: { ...DEFAULT_BINDINGS },
   // microphone / voice chat / mimicry (all off until the player turns them on)
   micEnabled: false, micDevice: '', voiceMode: 'ptt', micSensitivity: 0.5, mimicOptIn: false,
@@ -48,11 +52,14 @@ export class Settings {
       }
     } catch (e) { /* storage unavailable: defaults */ }
     if (!QUALITY_PRESETS[s.quality]) s.quality = 'high';
+    s.qualityChosen = false;
+    try { s.qualityChosen = !!(window.localStorage.getItem(KEY) && 'quality' in JSON.parse(window.localStorage.getItem(KEY)) && JSON.parse(window.localStorage.getItem(KEY)).qualityChosen); } catch (e) { /* defaults */ }
     return s;
   }
   save() {
     try {
       const o = {}; for (const k of Object.keys(DEFAULTS)) o[k] = this[k];
+      o.qualityChosen = !!this.qualityChosen;
       window.localStorage.setItem(KEY, JSON.stringify(o));
     } catch (e) { /* ignore */ }
     for (const fn of this.listeners) fn(this);
