@@ -27,6 +27,7 @@ async def check(port,commit):
             assert await page.evaluate('HM_BUILD')==commit
             assert await page.locator('.build-id').text_content()=='Build '+commit
             assert await page.evaluate("game.audio.playerBreathSource==='recorded'")
+            assert await page.evaluate("game.arms.ready===true"),'first-person hand models must load in the hosted package'
             await page.locator('#loading').wait_for(state='hidden')
             await page.click('#menu-main [data-act=single]')
             await page.click('#single-go')

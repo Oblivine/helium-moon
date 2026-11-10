@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><base href="/"><title>hands preview</title>
+<!-- serve the repo root (python3 -m http.server) and open /tools/hands_preview.html -->
+<style>html,body{margin:0;background:#111}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "/vendor/three/three.module.js", "three/addons/": "/vendor/three/addons/" } }</script>
+<canvas id="c"></canvas>
+<script type="module">
+// Developer preview of the first-person arms: every left-hand pose in a grid, as the game camera sees it.
+import * as THREE from 'three';
+import { Arms } from '/client/game/arms.js';
+const one = new URLSearchParams(location.search).get('one');
+const W = 1680, H = one ? 945 : 1260, cols = one ? 1 : 3, rows = one ? 1 : 4;
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true }); r.setSize(W, H); r.setScissorTest(true); r.autoClear = false;
+const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(72, (W / cols) / (H / rows), 0.06, 50); scene.add(cam);
+const model = new THREE.Group(); model.position.set(0.16, -0.15, -0.3); model.rotation.set(0.12, -0.25, 0.05); cam.add(model);
+model.add(new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.068, 0.012), new THREE.MeshBasicMaterial({ color: 0x8c1b14 })));
+const guard = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, 0.011), new THREE.MeshBasicMaterial({ color: 0xa8a8ac })); guard.position.y = 0.04; model.add(guard);
+const arms = new Arms(cam, { model, bodyMat: { color: { r: 0.55 } } });
+await arms.load();
+const q = new URLSearchParams(location.search);
+const poses = one ? [one] : (q.get('poses') || 'rest,carry,mouth,flame,use,hush,wind,loose,reach,sip0,sip1,held').split(',');
+r.setClearColor(0x30343a); r.setScissor(0, 0, W, H); r.clear();
+poses.forEach((p, i) => {
+  const x = (i % cols) * (W / cols), y = H - (Math.floor(i / cols) + 1) * (H / rows);
+  for (let k = 0; k < 3; k++) arms.update(0.3, { speed: 0, lighterOn: p !== 'rest', pose: p });
+  r.setViewport(x, y, W / cols, H / rows); r.setScissor(x, y, W / cols, H / rows);
+  r.setClearColor(i % 2 ? 0x2b2f35 : 0x33373d); r.clear(); r.render(scene, cam);
+});
+window.DONE = true;
+</script>

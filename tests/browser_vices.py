@@ -22,6 +22,7 @@ async def play(port):
             await page.click('#menu-main [data-act=single]'); await page.click('#single-go')
             await page.evaluate('game.advance(400, 1/30, false)')
             shot = lambda n: page.screenshot(path=str(OUT / f'{n}.png'), timeout=180000)
+            assert await page.evaluate('game.arms.ready === true'), 'hand models did not load'
             await page.evaluate('game.advance(2, 1/30, true)'); await shot('arm-lighter')
             # hand the player a pack and two beers through the real sim
             await page.evaluate("(() => { const s = game.net.sim, p = s.playerList[0]; p.cigs = 3; p.beers = 2; s.viceState(p); })()")
@@ -60,8 +61,12 @@ async def play(port):
             await page.evaluate('game.advance(120, 1/30, false)')
             d = await page.evaluate('!!game.net.sim.hv.pebbleDecoy')
             print('  ok  the empty bottle is the next throw (no pebble cooldown spent); he follows the smoke while searching; decoy set:', d, flush=True)
-            await page.evaluate("game.holdingBreath = true; game.arms.update(0.5, { speed: 0, breath: true, lighterOn: true }); game.arms.update(0.5, { speed: 0, breath: true, lighterOn: true })")
-            await page.evaluate('game.renderer.render ? 0 : 0')
+            # hand over the mouth while holding your breath
+            await page.keyboard.down('KeyC'); await page.keyboard.down('Space'); await page.evaluate('game.advance(40, 1/30, false)')
+            await page.evaluate('game.advance(1, 1/30, true)'); await shot('hush')
+            assert await page.evaluate('game.holdingBreath && game.arms.left.visible'), 'left hand should cover the mouth while holding breath'
+            await page.keyboard.up('Space'); await page.keyboard.up('KeyC')
+            print('  ok  hand models loaded; the left hand comes up while you hold your breath', flush=True)
             assert not errors, errors
             print('PASS cigarettes, beer and arms', flush=True)
         finally:

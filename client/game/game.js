@@ -92,6 +92,7 @@ export class Game {
     this.player = new PlayerController(world, this.camera, set);
     this.flashlight = new Flashlight(this.scene, preset, this.camera);
     this.arms = new Arms(this.camera, this.flashlight); this.smoulders = new Smoulders(this.scene);
+    await this.arms.load().catch((e) => console.warn('hand models did not load; arms will show sleeves only', e));
     this.vice = { cigs: 0, beers: 0, bottles: 0, smoked: 0, smoke: -1, buzz: -1 };
     this.remoteLights = [];
     for (let i = 0; i < REMOTE_LIGHTS; i++) {
