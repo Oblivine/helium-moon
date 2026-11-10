@@ -31,6 +31,7 @@ export class GameSim {
     this.events = []; this.evSeq = 1;
     this.gas = [];
     this.pebbles=[];this.pebbleSeq=1;
+    this.lures = []; this.lureSeq = 1;   // lit cigarettes left on the ground
     this.director = new Director(this);
     this.obj = new Objectives(this); this.obj.setup();
     this.hv = new HeliumVoiceAI(this); this.hv.spawn();
@@ -77,6 +78,7 @@ export class GameSim {
       noise: 0, voice: 0, use: null, revive: null, hidden: false, covered: false, breath: false, health: this.rules.health, state: 'alive',
       bleedT: 0, reviveT: 0, hurtT: -999, quietT: 0, moveDir: null, lastX: sp.x, lastZ: sp.z, escapeT: 0, interactNoise: false,
       pebbleReadyAt:0,paused:false,
+      cigs: 0, beers: 0, bottles: 0, smoked: 0, smokeUntil: -1, buzzUntil: -1,
     };
     this.players.set(id, p);
     this.playerList = [...this.players.values()];
@@ -125,6 +127,8 @@ export class GameSim {
     else if (a.a === 'dial') this.obj.turn(p,a.id);
     else if (a.a === 'untie') this.balloons.untie(p, a.id);
     else if (a.a === 'ping') this.ping(p, a);
+    else if (a.a === 'smoke') this.smoke(p, !!a.drop);
+    else if (a.a === 'drink') this.drink(p);
     else if (a.a === 'phrase') this.mimic.addPhrase(id, a.id, +a.dur);
     else if (a.a === 'phrase_drop') this.mimic.dropPhrase(id, a.id);
     else if (a.a === 'mimic_off') this.mimic.clear(id);
@@ -147,23 +151,59 @@ export class GameSim {
     return true;
   }
 
+  // ---- cigarettes and beer (CONFIG.VICE)
+  viceState(p) { this.emit({ type: 'vice', pid: p.id, cigs: p.cigs, beers: p.beers, bottles: p.bottles, smoked: p.smoked, smoke: +p.smokeUntil.toFixed(1), buzz: +p.buzzUntil.toFixed(1) }); }
+  viceOk(p) { return p.state === 'alive' && ['play', 'extract'].includes(this.state) && !p.covered && this.hv.grab?.pid !== p.id && !((p.heldUntil ?? -1) > this.time); }
+  smoke(p, drop) {
+    const V = CONFIG.VICE;
+    if (!this.viceOk(p) || p.cigs <= 0 || !p.flash) return false;   // it takes a flame
+    if (drop) {
+      if (this.lures.length >= V.MAX_LURES) return false;
+      p.cigs--;
+      const l = { id: 'cg' + this.lureSeq++, pid: p.id, x: p.x, y: this.world.heightAt(p.x, p.z), z: p.z, until: this.time + V.LURE_TIME, smelt: false };
+      this.lures.push(l);
+      this.emit({ type: 'cig_drop', id: l.id, pid: p.id, x: +l.x.toFixed(2), y: +l.y.toFixed(2), z: +l.z.toFixed(2), dur: V.LURE_TIME });
+    } else {
+      if (p.smokeUntil > this.time) return false;
+      p.cigs--; p.smoked++; p.smokeUntil = this.time + V.SMOKE_TIME;
+      this.emit({ type: 'smoke', pid: p.id, dur: V.SMOKE_TIME });
+    }
+    this.viceState(p); return true;
+  }
+  drink(p) {
+    if (!this.viceOk(p) || p.beers <= 0) return false;
+    p.beers--; p.bottles++; p.buzzUntil = this.time + CONFIG.VICE.BUZZ_TIME;
+    this.emit({ type: 'drink', pid: p.id, dur: CONFIG.VICE.BUZZ_TIME });
+    this.viceState(p); return true;
+  }
+  updateLures() {
+    const V = CONFIG.VICE;
+    for (let i = this.lures.length - 1; i >= 0; i--) {
+      const l = this.lures[i];
+      if (this.time >= l.until) { this.lures.splice(i, 1); this.emit({ type: 'cig_out', id: l.id }); continue; }
+      // he only follows it while he is searching, exactly like a pebble; once per cigarette
+      if (!l.smelt && this.hv.hearLure(l, V.LURE_RANGE, Math.min(V.LURE_HOLD, l.until - this.time))) { l.smelt = true; this.emit({ type: 'lure', pid: l.pid, what: 'cig' }); }
+    }
+  }
+
   throwPebble(p,aim){
     let reason=null;
     if(p.state!=='alive'||!['play','extract'].includes(this.state))reason='unavailable';
     else if(p.paused||this.paused)reason='paused';
     else if((p.heldUntil!=null&&this.time<p.heldUntil)||this.hv.grab?.pid===p.id)reason='held';
     else if(p.covered)reason='covered';
-    else if(this.time<(p.pebbleReadyAt||0))reason='cooldown';
+    else if(!(p.bottles>0)&&this.time<(p.pebbleReadyAt||0))reason='cooldown';
     else if(!this.hv.canHearPebble())reason='search';
     else if(!Number.isFinite(aim.yaw)||!Number.isFinite(aim.pitch))reason='aim';
     else if(this.pebbles.length>=CONFIG.PEBBLE.MAX_ACTIVE)reason='busy';
     if(reason){this.emit({type:'pebble_status',pid:p.id,reason,readyAt:p.pebbleReadyAt||0});return false;}
     const arc=tracePebble(this.world,eyePosition(this.world,p),aim.yaw,aim.pitch);
     if(!arc){this.emit({type:'pebble_status',pid:p.id,reason:'aim',readyAt:p.pebbleReadyAt||0});return false;}
-    p.pebbleReadyAt=this.time+CONFIG.PEBBLE.COOLDOWN;
-    const pebble={id:'pb'+this.pebbleSeq++,pid:p.id,startedAt:this.time,readyAt:p.pebbleReadyAt,...arc};
+    const bottle=p.bottles>0;   // an empty bottle goes before a pebble, and needs no searching for
+    if(bottle){p.bottles--;this.viceState(p);}else p.pebbleReadyAt=this.time+CONFIG.PEBBLE.COOLDOWN;
+    const pebble={id:'pb'+this.pebbleSeq++,pid:p.id,startedAt:this.time,readyAt:p.pebbleReadyAt,bottle,...arc};
     this.pebbles.push(pebble);
-    this.emit({type:'pebble_throw',id:pebble.id,pid:p.id,flight:arc.flight,duration:arc.duration,
+    this.emit({type:'pebble_throw',id:pebble.id,pid:p.id,bottle,flight:arc.flight,duration:arc.duration,
       startedAt:this.time,readyAt:p.pebbleReadyAt});
     return true;
   }
@@ -173,9 +213,9 @@ export class GameSim {
     for(const pebble of this.pebbles){
       if(this.time<pebble.startedAt+pebble.duration){pending.push(pebble);continue;}
       if(!pebble.hit)continue;
-      const at=pebble.impact,distracted=this.hv.hearPebble(at);
+      const at=pebble.impact,distracted=pebble.bottle?this.hv.hearLure(at,CONFIG.VICE.BOTTLE_RANGE,CONFIG.VICE.BOTTLE_HOLD):this.hv.hearPebble(at);
       this.balloons.pebble(at, pebble.pid);
-      this.emit({type:'pebble_impact',id:pebble.id,pid:pebble.pid,...at,kind:pebble.kind,distracted});
+      this.emit({type:'pebble_impact',id:pebble.id,pid:pebble.pid,...at,kind:pebble.kind,distracted,bottle:!!pebble.bottle});
     }
     this.pebbles=pending;
   }
@@ -233,6 +273,7 @@ export class GameSim {
       this.mimic.update(dt);
       this.wildlife.update(dt);
       this.balloons.update(dt);
+      this.updateLures();
       this.ambient.update(dt);
       this.stats.update(dt);
       this.updateRadio();

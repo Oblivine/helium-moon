@@ -321,3 +321,14 @@ html.touch #subs { bottom: 24%; font-size: 13px; max-width: 60vw; }
 html.touch #touch .t-pause { left: auto; right: 90px; }
 @media (max-width: 720px) { .diff-list { grid-template-columns: 1fr; } .jr-grid, .report { grid-template-columns: repeat(2, 1fr); } }
 @media (max-height: 480px) { .end-text .rank b { font-size: 22px; } .end-text .report b { font-size: 16px; } .end-text .story { font-size: 13px; margin-bottom: 8px; } #end .end-inner { padding: 12px; } }
+
+/* cigarettes and beer */
+#vice-tool { position:absolute; right:22px; bottom:118px; display:flex; flex-direction:column; gap:9px; align-items:flex-end; color:#d1cabb; text-shadow:0 1px 4px #000; }
+#vice-tool div { display:flex; align-items:center; gap:10px; }
+#vice-tool kbd { border:1px solid #b5ad9970; border-radius:3px; padding:5px 7px; font:11px var(--mono); }
+#vice-tool b { display:block; font:10px var(--mono); letter-spacing:.15em; font-weight:400; }
+#vice-tool small { display:block; font:10px var(--sans); color:var(--dim); margin-top:4px; }
+html.touch #vice-tool { right:auto; left:50%; transform:translateX(-50%); bottom:auto; top:44px; flex-direction:row; gap:14px; }
+html.touch #vice-tool kbd { display:none; }
+#touch .t-smoke { right: 150px; bottom: 186px; width: 56px; height: 40px; border-radius: 20px; }
+#touch .t-drink { right: 212px; bottom: 124px; width: 56px; height: 40px; border-radius: 20px; }

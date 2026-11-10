@@ -11,6 +11,7 @@ export const DEFAULT_BINDINGS = {
   camouflage: 'KeyX',
   pebble: 'KeyG',
   ping: 'KeyZ',
+  smoke: 'KeyT', drink: 'KeyB',
 };
 
 export const BINDING_LABELS = {
@@ -21,6 +22,7 @@ export const BINDING_LABELS = {
   camouflage: 'Use camouflage blanket',
   pebble: 'Throw a pebble (search distraction)',
   ping: 'Ping a spot for your team',
+  smoke: 'Smoke a cigarette (crouched: set it down)', drink: 'Drink a beer',
 };
 
 const DEFAULTS = {

@@ -69,6 +69,7 @@ export class AudioEngine {
     for (let i = 0; i < 2; i++) { add('balloonPop' + i, () => S.balloonPop(400 + i)); add('farmDog' + i, () => S.farmDog(410 + i)); add('branchFall' + i, () => S.branchFall(420 + i)); }
     add('balloonSqueak', () => S.balloonSqueak(430)); add('train', () => S.distantTrain(431)); add('carAlarm', () => S.carAlarmLoop());
     add('pingTick', () => S.pingTick(432)); add('radioBlip', () => S.radioBlip(433)); add('gasp', () => S.gasp(434));
+    add('bottleSmash', () => S.bottleSmash(435)); add('drag', () => S.drag(436)); add('beerOpen', () => S.beerOpen(437));
     add('lighterOn', () => S.lighterStrike(280, true)); add('lighterSpark', () => S.lighterStrike(281, false)); add('lighterOff', () => S.lighterRelease(282));
     // the Puppet: joints, crawl, knuckles, the collapse and the grab
     for (let i = 0; i < 4; i++) { add('pop' + i, () => S.jointPop(200 + i)); add('crawl' + i, () => S.crawlPatter(210 + i)); }

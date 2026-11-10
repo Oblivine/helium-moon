@@ -17,6 +17,7 @@ import { makePropMaterials } from '../render/props.js';
 import { Environment } from './environment.js';
 import { PlayerController } from './player.js';
 import { Flashlight } from './flashlight.js';
+import { Arms, Smoulders } from './arms.js';
 import { BreathFX, AnomalyFX } from './effects.js';
 import { PebbleViews } from './pebbles.js';
 import { BalloonViews, PingViews } from '../entities/balloons.js';
@@ -90,6 +91,8 @@ export class Game {
     this.scene.add(this.camera);
     this.player = new PlayerController(world, this.camera, set);
     this.flashlight = new Flashlight(this.scene, preset, this.camera);
+    this.arms = new Arms(this.camera, this.flashlight); this.smoulders = new Smoulders(this.scene);
+    this.vice = { cigs: 0, beers: 0, bottles: 0, smoked: 0, smoke: -1, buzz: -1 };
     this.remoteLights = [];
     for (let i = 0; i < REMOTE_LIGHTS; i++) {
       const L = new THREE.PointLight(0xffa54d, 0, CONFIG.FLASHLIGHT.RANGE, 2);   // teammates' lighters
@@ -256,7 +259,9 @@ export class Game {
     this.me = null; this.myState = 'alive'; this.health = this.rules.health;
     this.flashlight.fuelMul = this.rules.fuel;
     this.lungs = this.rules.lungs; this.holdingBreath = false; this.gaspT = 0; this.lungDelay = 0;
-    this.balloons.clear(); this.pings.clear(); this.subs = []; this.subT = 0; this.ui.subtitle(null); this.ui.hint(null);
+    this.balloons.clear(); this.pings.clear(); this.arms.reset(); this.smoulders.clear();
+    this.vice = { cigs: 0, beers: 0, bottles: 0, smoked: 0, smoke: -1, buzz: -1 }; this.player.staminaMul = 1;
+    this.subs = []; this.subT = 0; this.ui.subtitle(null); this.ui.hint(null);
     this._alarmT = 0; this._hintT = 12; this._sawHunt = false;
     this.pebbleReadyAt=0;
     this.notesRead = []; this.reading = null; this.sessionT = 0; this.fade = 1; this.fadeTarget = 0;
@@ -414,10 +419,11 @@ export class Game {
       case 'begin': this._objectivesDirty = true; this.wildlife?.end(); break;
       case 'pebble_throw':
         this.pebbles.spawn(e,Math.max(0,(this.snapT||e.t)-e.t));
-        if(e.pid===this.myId)this.pebbleReadyAt=e.readyAt;
+        if(e.pid===this.myId){this.pebbleReadyAt=e.readyAt;this.arms.play('throw');}
         break;
       case 'pebble_impact':
-        this.pebbles.impact(e.id,pos,e.kind);this.audio.pebbleImpact(pos,e.seq||0);
+        this.pebbles.impact(e.id,pos,e.kind);
+        if(e.bottle)A.at('bottleSmash',pos,{bus:'sfx',gain:1.3,ref:7,reverb:.4});else this.audio.pebbleImpact(pos,e.seq||0);
         break;
       case 'pebble_status':
         if(e.pid===this.myId){
@@ -506,7 +512,10 @@ export class Game {
         const it = this.info.layout.items.find((i) => i.id === e.id);
         this.objViews.setHeld(e.id, true);
         if (e.pid === this.myId) {
-          if (e.kind === 'battery') { this.flashlight.addBattery(CONFIG.FLASHLIGHT.BATTERY_PICKUP); A.ui('clink', 0.6); this.ui.toast('A spare lighter. More fuel.', 2000); }
+          this.arms.play('reach');
+          if (e.kind === 'cigs') { A.ui('paper', 0.5); this.ui.toast(`A pack of cigarettes. ${this._key('smoke')} with the lighter lit: steadier hands for repairs, shorter breath all night. Crouched, it sets one down for him to smell.`, 7000); }
+          else if (e.kind === 'beer') { A.ui('clink', 0.7); this.ui.toast(`A bottle of beer. ${this._key('drink')} to drink: your legs last longer, you breathe louder. The empty is your next throw.`, 6500); }
+          else if (e.kind === 'battery') { this.flashlight.addBattery(CONFIG.FLASHLIGHT.BATTERY_PICKUP); A.ui('clink', 0.6); this.ui.toast('A spare lighter. More fuel.', 2000); }
           else if (e.kind === 'blanket') { this.player.hasCamoBlanket = true; A.ui('paper', 0.55); this.ui.toast('Camouflage blanket: crouch, light off, hold X while still to hide.', 4500); }
           else if (e.kind === 'note') { A.ui('paper', 0.8); const n = this._sessionNote(e.note); if (n) { this.notesRead.push(n.id); this.reading = n; this.ui.showNote(n, this.journal.noteFound(n.id)); } }
           else { A.ui('clink', 0.7); this.ui.toast(e.kind === 'fuel' ? 'Picked up the gas can.' : e.kind==='crank'?'Handwheel recovered. Fit it to the far-bank aerial and turn toward the mast.':'Picked up the fuse kit.', 3000); }
@@ -524,6 +533,15 @@ export class Game {
         else this._reactAvatar(e.pid, pos);
         if (e.pid === this.myId) this._hint('popped', 'That was loud. If he is anywhere near, he heard it. Crouch to pass under them, or untie them.');
         break;
+      case 'vice': if (e.pid === this.myId) this.vice = e; break;
+      case 'smoke':
+        if (e.pid === this.myId) { this.arms.startSmoke(e.dur); A.ui('drag', 0.5); this._hint('smoke', 'While it burns your hands are steadier and repairs go faster. He can see the ember and smell the smoke: you cannot hide until it is out. Each one costs you breath for the rest of the night.', 11000); }
+        break;
+      case 'drink':
+        if (e.pid === this.myId) { this.arms.play('drink'); A.ui('beerOpen', 0.6); this._hint('beer', 'For a little over a minute you can run longer, and you breathe louder when he is close. You kept the empty: your next throw is the bottle, and he hears it from much farther than a pebble.', 11000); }
+        break;
+      case 'cig_drop': this.smoulders.add(e.id, e.x, e.y, e.z, e.dur); if (e.pid === this.myId) this.arms.play('reach'); break;
+      case 'cig_out': this.smoulders.remove(e.id); break;
       case 'balloon_untie': this.balloons.untie(e.id); A.at('balloonSqueak', pos, { bus: 'sfx', gain: 0.5, ref: 2, reverb: 0.05 }); break;
       case 'ambient': this._ambient(e, pos); break;
       case 'ping': {
@@ -712,6 +730,25 @@ export class Game {
       else if((this.pebbleReadyAt||0)>(this.snapT||0)+.02)this.ui.toast('Give it a moment before throwing another pebble.',1600);
       else this.net.send({t:'act',a:'pebble',yaw:pl.yaw,pitch:pl.pitch});
     }
+    // cigarettes and beer
+    if (active && !typing && !this.reading && !this._grab && this.myState === 'alive' && !this.arms.busy()) {
+      const v = this.vice, now = this.snapT || 0;
+      if (inp.hit('smoke')) {
+        if (!(v.cigs > 0)) this.ui.toast('No cigarettes.', 1400);
+        else if (!this.flashlight.on) this.ui.toast('You need a flame. Light the lighter first.', 2200);
+        else if (pl.crouching) this.net.send({ t: 'act', a: 'smoke', drop: 1 });
+        else if (v.smoke > now) this.ui.toast('You already have one going.', 1400);
+        else this.net.send({ t: 'act', a: 'smoke' });
+      }
+      if (inp.hit('drink')) { if (v.beers > 0) this.net.send({ t: 'act', a: 'drink' }); else this.ui.toast(v.bottles > 0 ? `Empty. ${this._key('pebble')} throws the bottle.` : 'Nothing to drink.', 1800); }
+    }
+    {
+      const now = this.snapT || 0, buzz = clamp((this.vice.buzz - now) / 12, 0, 1);   // fades over its last seconds
+      pl.staminaMul = buzz > 0 ? lerp(1, CONFIG.VICE.BUZZ_STAMINA, buzz) : 1;
+      this._buzzT = (this._buzzT || 0) + dt;
+      if (buzz > 0 && !dead) { const t = this._buzzT; this.camera.rotation.z += Math.sin(t * 0.9) * 0.022 * buzz; this.camera.rotation.x += Math.sin(t * 0.63 + 1) * 0.008 * buzz; this.camera.rotation.y += Math.sin(t * 0.47) * 0.012 * buzz; }
+    }
+    this.smoulders.update(dt);
     this.pebbles.update(dt);
     this.balloons.update(dt); this.pings.update(dt);
     this._breath(dt, active && !typing && !this.reading);
@@ -756,6 +793,7 @@ export class Game {
     // ---- flashlight + breath + anomalies
     const walkBob = Math.sin(pl.bobT) * clamp(pl.speed / 2, 0, 1);
     fl.update(dt, this.camera, this.terror, { walkBob, gas: this.gasFx, off: dead, rush: this._rush(dt) });
+    this.arms.update(dt, { speed: pl.speed, sprint: pl.sprinting, crouch: pl.crouching, using: !!(this.useId || this.reviveId), breath: this.holdingBreath, grabbed: !!this._grab, lighterOn: fl.on, hidden: dead || this.myState !== 'alive' });
     this.wildlife.update(dt, this.camera.position, { on: fl.on && fl.light.intensity > 5, pos: fl.light.position, dir: fl.dir, k: fl.light.intensity / CONFIG.FLASHLIGHT.INTENSITY });
     this.objViews.update(dt, this.sessionT, {
       on: fl.on, pos: fl.light.position, dir: fl.dir, range: CONFIG.FLASHLIGHT.RANGE * 2,
@@ -780,7 +818,7 @@ export class Game {
     }
     if (this.touch) {
       this.touch.setVisible(active && this.myState !== 'dead' && this.myState !== 'escaped');
-      this.touch.state({ blanket: !!pl.hasCamoBlanket, ping: !!(this.net && this.net.networked), breath: pl.crouching && pl.speed < 0.6, use: this.ui._prompt });
+      this.touch.state({ blanket: !!pl.hasCamoBlanket, ping: !!(this.net && this.net.networked), smoke: this.vice.cigs > 0, drink: this.vice.beers > 0, bottle: this.vice.bottles > 0, breath: pl.crouching && pl.speed < 0.6, use: this.ui._prompt });
     }
     // ---- HUD
     this._fade(dt);
@@ -989,9 +1027,14 @@ export class Game {
   // ---------------------------------------------------------------- Update 0.9 helpers
   // Hold your breath: crouched and still, hold Jump. Lungs are yours (like stamina): they drain
   // while you hold, refill when you breathe, and if they empty you gasp - loudly - for a moment.
+  // every cigarette smoked tonight costs lung capacity
+  _lungMax() { return (this.rules?.lungs || 10) * CONFIG.VICE.SMOKE_LUNGS ** (this.vice?.smoked || 0); }
+  _key(action) { return this.touch ? action.toUpperCase() : this.settings.keyName(this.settings.bindings[action]); }
+
   _breath(dt, active) {
-    const pl = this.player, B = CONFIG.BREATH, max = this.rules?.lungs || 10;
+    const pl = this.player, B = CONFIG.BREATH, max = this._lungMax();
     if (this.gaspT > 0) this.gaspT -= dt;
+    if (this.lungs > max) this.lungs = max;
     const can = active && this.myState === 'alive' && pl.crouching && pl.speed < 0.6 && this.gaspT <= 0 && !this._grab;
     const want = can && this.input.down('jump') && this.lungs > 0;
     if (want) {
@@ -1028,7 +1071,7 @@ export class Game {
     else if (e.kind === 'branch') A.at('branchFall' + (e.s % 2), pos, { bus: 'sfx', gain: 1.5, ref: 12, reverb: 0.35 });
     else if (e.kind === 'alarm') {
       const lot = { x: e.x, y: this.world.heightAt(e.x, e.z) + 1, z: e.z };
-      A.stopLoop('alarm'); A.loopAt('alarm', 'carAlarm', lot, { bus: 'amb', gain: 0.4, ref: 25, rolloff: 1.2, reverb: 0.8, occlude: false }   // owner Nov 10: was too loud; a distant alarm across the lot);
+      A.stopLoop('alarm'); A.loopAt('alarm', 'carAlarm', lot, { bus: 'amb', gain: 0.4, ref: 25, rolloff: 1.2, reverb: 0.8, occlude: false });   // owner Nov 10: was too loud; a distant alarm across the lot
       this._alarmT = e.dur || 25;
     }
   }
@@ -1251,7 +1294,8 @@ export class Game {
     if (this._objectivesDirty) { this._objectivesDirty = false; this.ui.objectives(this._activeObjectiveLines()); }
     this.ui.meters(pl.stamina / CONFIG.PLAYER.STAMINA_MAX, this.flashlight.battery, this.flashlight.on);
     this.ui.pebble(Math.max(0,(this.pebbleReadyAt||0)-(this.snapT||0)),this.myState==='alive'&&!pl.covered);
-    this.ui.lungs(this.lungs / (this.rules?.lungs || 10), this.holdingBreath, this.gaspT > 0);
+    this.ui.lungs(this.lungs / this._lungMax(), this.holdingBreath, this.gaspT > 0);
+    this.ui.vices(this.vice, this.snapT || 0);
     this._compass(dt); this._subtitles(dt); this._hints(dt);
     this._teamT = (this._teamT || 0) - dt;
     if (this._teamT <= 0) {

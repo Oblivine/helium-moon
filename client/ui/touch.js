@@ -34,6 +34,8 @@ export class TouchControls {
         <button class="t-btn t-pebble" data-k="pebble" aria-label="Throw a pebble">PEBBLE</button>
         <button class="t-btn t-blanket hidden" data-k="camouflage" aria-label="Camouflage blanket">BLANKET</button>
         <button class="t-btn t-ping hidden" data-k="ping" aria-label="Ping for your team">PING</button>
+        <button class="t-btn t-smoke hidden" data-k="smoke" aria-label="Smoke a cigarette, or set it down while crouched">SMOKE</button>
+        <button class="t-btn t-drink hidden" data-k="drink" aria-label="Drink a beer">DRINK</button>
       </div>
       <div class="t-rotate">Turn your phone sideways to play.</div>`;
     document.body.appendChild(root);
@@ -108,16 +110,18 @@ export class TouchControls {
       this.stick = null; this.look = null; this.stickEl.classList.add('hidden'); this._stick(0, 0);
       for (const a of ['interact', 'flashlight', 'jump']) this._hold(this._code(a), false);
       for (const b of this.root.querySelectorAll('.t-btn:not(.t-crouch):not(.t-notes)')) b.classList.remove('on');
-      for (const a of ['pebble', 'ping']) this._hold(this._code(a), false);
+      for (const a of ['pebble', 'ping', 'smoke', 'drink']) this._hold(this._code(a), false);
       if (this.notesOn) { this.notesOn = false; this._hold(this._code('inventory'), false); this.root.querySelector('.t-notes').classList.remove('on'); this.root.classList.remove('reading'); }
     }
   }
 
   // per-frame state from the game: which optional buttons exist, and what Jump means right now
-  state({ blanket = false, ping = false, breath = false, use = '' } = {}) {
+  state({ blanket = false, ping = false, breath = false, use = '', smoke = false, drink = false, bottle = false } = {}) {
     const q = (c) => this.root.querySelector(c);
     q('.t-blanket').classList.toggle('hidden', !blanket);
     q('.t-ping').classList.toggle('hidden', !ping);
+    q('.t-smoke').classList.toggle('hidden', !smoke); q('.t-drink').classList.toggle('hidden', !drink);
+    const pb = q('.t-pebble'), pl = bottle ? 'BOTTLE' : 'PEBBLE'; if (pb.textContent !== pl) pb.textContent = pl;
     if (!blanket && this.blanketOn) { this.blanketOn = false; this._hold(this._code('camouflage'), false); q('.t-blanket').classList.remove('on'); }
     const j = q('.t-jump'), label = breath ? 'BREATH' : 'JUMP';
     if (j.textContent !== label) j.textContent = label;

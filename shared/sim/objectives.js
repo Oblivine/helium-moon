@@ -110,6 +110,13 @@ export class Objectives {
     const noteRng = makeRng((this.sim.seed ^ 0x4e07e5) >>> 0);
     const others = noteRng.shuffle(NOTES.slice(1)).slice(0, CONFIG.NOTES_PER_NIGHT);
     for (const n of others) { const s = (n.id === 'camp' && take((s) => s.label === 'camp',false)) || take(() => true); if (s) this.items.push({ id: 'note_' + n.id, kind: 'note', note: n.id, name: n.id==='camp'&&s.label!=='camp'?'Crumpled campsite note':n.title, ...s, holder: null }); }
+    // cigarettes and beer go down last, from whatever spots are left: nothing earlier moves
+    const cigSpot = take((s) => ['car', 'shed', 'pumphouse'].includes(s.label), false) || take((s) => s.label === 'trail', false);
+    if (cigSpot) this.items.push({ id: 'cigs0', kind: 'cigs', name: 'Pack of cigarettes', ...cigSpot, holder: null });
+    for (let k = 0; k < CONFIG.VICE.BEERS; k++) {
+      const s = take((s) => ['camp', 'fishing', 'car', 'overlook'].includes(s.label), false) || take((s) => s.label === 'trail', false);
+      if (s) this.items.push({ id: 'beer' + k, kind: 'beer', name: 'Bottle of beer', ...s, holder: null });
+    }
     this.team = { fuel: false, fuse: false, crank:false };
     this.notesRead = [];
   }
@@ -147,7 +154,8 @@ export class Objectives {
       }
       if (workers.length) {
         const working=workers[0];
-        s.prog = Math.min(1, s.prog + dt / s.hold * Math.min(1.7,1+.35*(workers.length-1)));
+        const steady = workers.some((q) => q.smokeUntil > sim.time) ? CONFIG.VICE.SMOKE_WORK : 1;   // a cigarette steadies the hands
+        s.prog = Math.min(1, s.prog + dt / s.hold * steady * Math.min(1.7,1+.35*(workers.length-1)));
         const checkpoint=Math.floor(s.prog*3+1e-7)/3;
         if(checkpoint>s.checkpoint){
           s.checkpoint=checkpoint;
@@ -172,7 +180,10 @@ export class Objectives {
     it.holder = p.id;
     if (TEAM_ITEMS.includes(it.kind)) this.team[it.kind] = true;
     if (it.kind === 'note') this.notesRead.push(it.note);
+    if (it.kind === 'cigs') p.cigs += CONFIG.VICE.CIG_PACK;
+    if (it.kind === 'beer') p.beers++;
     this.sim.emit({ type: 'pickup', id, kind: it.kind, pid: p.id, note: it.note || null });
+    if (it.kind === 'cigs' || it.kind === 'beer') this.sim.viceState(p);
     return true;
   }
 

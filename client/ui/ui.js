@@ -63,6 +63,7 @@ export class UI {
     this.el.lungs = mk('lungs', 'hidden'); this.el.lungs.innerHTML = '<span>BREATH</span><div class="bar"><div></div></div>';
     this.el.subs = mk('subs', 'hidden');
     this.el.hintCard = mk('hint-card', 'hidden');
+    this.el.vices = mk('vice-tool', 'hidden');
     this.el.note = document.createElement('div'); this.el.note.id = 'note'; this.el.note.className = 'hidden'; document.body.appendChild(this.el.note);
   }
 
@@ -150,6 +151,8 @@ export class UI {
         <li><b>The world beyond the trees.</b> A freight train, a farm dog, a branch coming down, somebody's car alarm.</li>
         <li><b>The handheld.</b> After the distress call, the county unit talks you in.</li>
         <li><b>Phones and tablets.</b> Touch controls, and a HUD that fits.</li>
+        <li><b>Cigarettes and beer.</b> A cigarette steadies your hands for repairs but you cannot hide while it burns, and each one shortens your breath for the night; set one down lit and he will follow the smell while he searches. A beer keeps your legs going but makes you breathe louder, and the empty bottle is a throw he hears from much farther than a pebble.</li>
+        <li><b>Your arms.</b> You can see your hands now: on the lighter, on the work, over your mouth.</li>
         <li><b>Co-op ping</b>, a brightness setting, and a lighter flame that no longer glows like a brick.</li>
       </ul>`);
     el.onclick = null; el.oninput = null;
@@ -183,6 +186,8 @@ export class UI {
         <tr><td>${k('crouch')} / ${k('crouchAlt')}</td><td>Crouch — quieter; crouch still in thick brush to hide</td></tr>
         <tr><td>${k('leanLeft')} / ${k('leanRight')}</td><td>Hold to lean left / right around cover; release to center</td></tr>
         <tr><td>${k('camouflage')}</td><td>Camouflage blanket — crouch, stay still, and switch off the light</td></tr>
+        <tr><td>${k('smoke')}</td><td>Smoke a cigarette (lighter lit) — faster repairs, no hiding while it burns, less breath all night. Crouched: set it down as a lure</td></tr>
+        <tr><td>${k('drink')}</td><td>Drink a beer — sprint longer, breathe louder; the empty bottle becomes your next throw</td></tr>
         <tr><td>${k('pebble')}</td><td>Throw a pebble where you look — search distraction, unlimited, 20-second cooldown</td></tr>
         <tr><td>${k('jump')}</td><td>Jump</td></tr>
         <tr><td>${k('interact')}</td><td>Interact · hold to repair / revive</td></tr>
@@ -591,6 +596,17 @@ export class UI {
     }
     const html = marks.join('');
     if (html !== this._compHtml) { this._compHtml = html; strip.innerHTML = html; }
+  }
+
+  // what is in your pockets: cigarettes, beer, an empty bottle, and what is in your blood
+  vices(v, now) {
+    const key = (a) => this.s.keyName(this.s.bindings[a]), rows = [];
+    const smoking = v.smoke > now, buzzed = v.buzz > now;
+    if (v.cigs > 0 || smoking) rows.push(`<div><kbd>${esc(key('smoke'))}</kbd><span><b>CIGARETTES</b><small>${v.cigs} left${smoking ? ` · lit ${Math.ceil(v.smoke - now)}s` : ''}</small></span></div>`);
+    if (v.beers > 0 || buzzed) rows.push(`<div><kbd>${esc(key('drink'))}</kbd><span><b>BEER</b><small>${v.beers} left${buzzed ? ` · buzzed ${Math.ceil(v.buzz - now)}s` : ''}</small></span></div>`);
+    if (v.bottles > 0) rows.push(`<div><kbd>${esc(key('pebble'))}</kbd><span><b>EMPTY BOTTLE</b><small>${v.bottles} · next throw</small></span></div>`);
+    const html = rows.join('');
+    if (html !== this._viceHtml) { this._viceHtml = html; this.el.vices.innerHTML = html; this.el.vices.classList.toggle('hidden', !html); }
   }
 
   lungs(frac, holding, gasping) {

@@ -422,6 +422,37 @@ export function radioBlip(seed) {
   for (let i = 0; i < N(0.05); i++) out[i] += Math.sin(TAU * 1250 * i / SR) * 0.4 * (1 - i / N(0.05));
   return fade(normalize(softclip(out, 2), 0.5), SR, 0.002, 0.03);
 }
+// an empty bottle going to pieces: a hard crack, then glass ringing and skittering
+export function bottleSmash(seed) {
+  const r = rngFor(seed), n = N(0.9), out = new Float32Array(n), nz = noise(n, r);
+  for (let i = 0; i < n; i++) { const t = i / SR; out[i] = nz[i] * Math.exp(-t * 26) * 0.9; }
+  for (let k = 0; k < 9; k++) {
+    const f = r.range(2400, 7800), t0 = r.range(0, 0.22), dec = r.range(9, 24), g = r.range(0.12, 0.3), i0 = N(t0);
+    for (let i = i0; i < n; i++) { const t = (i - i0) / SR; out[i] += Math.sin(TAU * f * t) * Math.exp(-t * dec) * g; }
+  }
+  return fade(normalize(filter(out, 'hp', 900, 0.7, SR), 0.8), SR, 0.001, 0.1);
+}
+// a drag on a cigarette: a soft pull in, a long breath out
+export function drag(seed) {
+  const r = rngFor(seed), n = N(2.6), out = new Float32Array(n), nz = noise(n, r);
+  const bp = new Biquad('bp', 1800, 0.8, SR);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR, e = t < 0.9 ? Math.sin(Math.PI * t / 0.9) * 0.5 : t < 1.2 ? 0 : Math.sin(Math.PI * (t - 1.2) / 1.4) ** 0.7;
+    if ((i & 63) === 0) bp.set('bp', t < 0.9 ? 2400 : 900 + 500 * Math.sin(t), 0.8);
+    out[i] = bp.tick(nz[i]) * e;
+  }
+  return fade(normalize(out, 0.35), SR, 0.02, 0.2);
+}
+// a cap coming off and three swallows
+export function beerOpen(seed) {
+  const r = rngFor(seed), n = N(2.8), out = new Float32Array(n), nz = noise(n, r);
+  for (let i = 0; i < N(0.25); i++) { const t = i / SR; out[i] = nz[i] * Math.exp(-t * 18) * 0.8 + Math.sin(TAU * 3100 * t) * Math.exp(-t * 60) * 0.5; }
+  for (let k = 0; k < 3; k++) {
+    const i0 = N(0.9 + k * 0.55), len = N(0.2);
+    for (let i = 0; i < len; i++) { const t = i / SR, f = 150 + 260 * (t / 0.2); out[i0 + i] += Math.sin(TAU * f * t) * Math.sin(Math.PI * t / 0.2) * 0.6; }
+  }
+  return fade(normalize(out, 0.5), SR, 0.001, 0.1);
+}
 // your lungs giving out after holding your breath too long: a ragged gasp in, a shaky breath out
 export function gasp(seed) {
   const r = rngFor(seed), d = 1.5, n = N(d), out = new Float32Array(n), nz = noise(n, r);

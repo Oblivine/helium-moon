@@ -80,7 +80,7 @@ export class PlayerController {
     const target = (this.crouching ? P.CROUCH : wantSprint ? P.SPRINT : P.WALK) * mul;
     this.sprinting = wantSprint && len > 0 && this.grounded;
     if (this.sprinting) {
-      this.stamina -= dt * (this.injured ? 1.3 : 1); this.staminaDelay = P.STAMINA_REGEN_DELAY;
+      this.stamina -= dt * (this.injured ? 1.3 : 1) * (this.staminaMul || 1); this.staminaDelay = P.STAMINA_REGEN_DELAY;
       if (this.stamina <= 0) { this.stamina = 0; this.exhausted = true; }
     } else {
       this.staminaDelay -= dt;

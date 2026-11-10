@@ -358,6 +358,21 @@ export class ObjectiveViews {
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.012, 0.068), new THREE.MeshStandardMaterial({ color: 0x1d5c8c, roughness: 0.45 }));
       body.position.y = 0.006; g.add(body);
       const top = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.011, 0.012), X.grey); top.position.set(0, 0.006, 0.04); g.add(top);
+    } else if (it.kind === 'cigs') {
+      // a soft pack lying flat, one cigarette shaken half out
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.022, 0.085), new THREE.MeshStandardMaterial({ color: 0xc9c2b2, roughness: 0.8 }));
+      pack.position.y = 0.011; g.add(pack);
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.023, 0.03), new THREE.MeshStandardMaterial({ color: 0x8c1b14, roughness: 0.7 })); band.position.set(0, 0.011, -0.012); g.add(band);
+      const cig = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.07, 6), new THREE.MeshStandardMaterial({ color: 0xe6e2d6, roughness: 0.9 }));
+      cig.rotation.x = Math.PI / 2; cig.position.set(0.012, 0.016, 0.06); g.add(cig);
+    } else if (it.kind === 'beer') {
+      // a brown longneck standing in the dirt
+      const glass = new THREE.MeshStandardMaterial({ color: 0x4a2a0e, roughness: 0.25, metalness: 0.1 });
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.13, 10), glass); b.position.y = 0.065; g.add(b);
+      const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, 0.035, 10), glass); sh.position.y = 0.147; g.add(sh);
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.012, 0.06, 8), glass); neck.position.y = 0.195; g.add(neck);
+      const lab = new THREE.Mesh(new THREE.CylinderGeometry(0.0305, 0.0305, 0.055, 10), new THREE.MeshStandardMaterial({ color: 0xb89a55, roughness: 0.8 })); lab.position.y = 0.07; g.add(lab);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.0125, 0.0125, 0.008, 8), X.grey); cap.position.y = 0.228; g.add(cap);
     } else if (it.kind === 'blanket') {
       const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.48, 0.36, 5, 4), new THREE.MeshStandardMaterial({ color: 0x3b4a2c, roughness: 1, side: THREE.DoubleSide }));
       cloth.rotation.x = -Math.PI / 2; cloth.rotation.z = 0.28; cloth.position.y = 0.025;

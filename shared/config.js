@@ -40,6 +40,14 @@ export const CONFIG = {
     // Teammates remain locatable nearby without sounding like another threat.
     REMOTE_STEP_FADE_START: 4, REMOTE_STEP_MAX_DISTANCE: 11, REMOTE_STEP_GAIN: 0.45,
   },
+  // Cigarettes and beer (owner, Nov 10 2026). Both are trades, never free:
+  //  - smoke one (lighter lit): steadier hands, repairs go faster while it burns; but the ember and
+  //    the smoke mean you cannot hide, and every one costs lung capacity for the rest of the night.
+  //  - set one down lit (crouched): during a search he follows the smell to it.
+  //  - drink a beer: your legs last longer, but you breathe louder and the world sways. It leaves an
+  //    empty bottle: your next throw is the bottle, and it carries much farther than a pebble's click.
+  VICE: { CIG_PACK: 3, SMOKE_TIME: 40, SMOKE_WORK: 1.4, SMOKE_LUNGS: 0.88, LURE_TIME: 45, LURE_RANGE: 26, LURE_HOLD: 14, MAX_LURES: 4,
+    BEERS: 3, BUZZ_TIME: 80, BUZZ_STAMINA: 0.55, BUZZ_HEAR: 1.4, BOTTLE_RANGE: 55, BOTTLE_HOLD: 20 },
   PEBBLE: {
     COOLDOWN: 20, SPEED: 13, UP_BOOST: 3.4, GRAVITY: 12, RADIUS: .035,
     MAX_FLIGHT: 4, MAX_RANGE: 30, MAX_ACTIVE: 12,

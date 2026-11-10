@@ -860,6 +860,14 @@ export class HeliumVoiceAI {
     return true;
   }
 
+  // a smashed bottle or a smouldering cigarette: the same search-only decoy as a pebble, with its own reach and hold
+  hearLure(at, range, hold) {
+    if (!this.canHearPebble() || Math.hypot(at.x - this.x, at.z - this.z) > range || !this.outsideSpawn(at.x, at.z)) return false;
+    this.pebbleDecoy = { x: at.x, y: at.y, z: at.z, t: this.sim.time, until: this.sim.time + hold };
+    this.path = null; this.huntSearchGoal = null; this.huntSearchedAt = -Infinity; this.replanT = 0;
+    return true;
+  }
+
   hearPebble(at){
     if(!this.canHearPebble()||![at.x,at.y,at.z].every(Number.isFinite)
         ||Math.hypot(at.x-this.x,at.y-this.y-EYE,at.z-this.z)>CONFIG.PEBBLE.HEAR_RANGE)return false;
@@ -1063,7 +1071,7 @@ export class HeliumVoiceAI {
   // breathing, he notices after BREATH.GRACE s and walks to (about) where they are. Holding
   // their breath, or being further than rules.breathHear, lets it drain away again.
   listenForBreath(dt, tp) {
-    const B = CONFIG.BREATH, sim = this.sim, d = this.dist(tp), hear = sim.rules?.breathHear ?? 4.5;
+    const B = CONFIG.BREATH, sim = this.sim, d = this.dist(tp), hear = (sim.rules?.breathHear ?? 4.5) * (tp.buzzUntil > sim.time ? CONFIG.VICE.BUZZ_HEAR : 1);
     // for the night report: a search pass this close to a hidden player
     if (d < B.CLOSE_PASS) { if (!this.closePass) { this.closePass = true; sim.emit({ type: 'hv_close_pass', pid: tp.id }); } }
     else if (d > B.CLOSE_PASS + 3) this.closePass = false;
@@ -1187,7 +1195,7 @@ export class HeliumVoiceAI {
   // It prevents discovery; the hunt's shared deadline determines when he gives up.
   hidden(tp) {
     // standing upright in the open is not hiding, however far he is: crouch, get in brush or under cover
-    if (!tp.flash && (tp.crouch || tp.hidden || tp.covered) && (tp.moveSpeed || 0) < C.HIDE_STILL && !tp.sprint && noiseRadius(tp, C) <= C.HIDE_NOISE) {
+    if (!tp.flash && !(tp.smokeUntil > this.sim.time) && (tp.crouch || tp.hidden || tp.covered) && (tp.moveSpeed || 0) < C.HIDE_STILL && !tp.sprint && noiseRadius(tp, C) <= C.HIDE_NOISE) {
       // A deployed blanket removes the need for hard cover, but only while the player is
       // crouched, motionless, dark and quiet; moving or leaving the light on exposes them.
       // sight is tested toward them, not along wherever his head happens to point: otherwise looking
