@@ -4,6 +4,7 @@ import { CONFIG, QUALITY_PRESETS } from '../../shared/config.js';
 import { BUILD_COMMIT } from '../build.js';
 import { BINDING_LABELS, DEFAULT_BINDINGS } from '../core/settings.js';
 import { FEATS } from '../core/journal.js';
+import { DEV_ITEMS } from '../../shared/sim/dev.js';
 import { NOTES } from '../../shared/sim/objectives.js';
 import { WSTransport, defaultServerUrl } from '../net/transport.js';
 
@@ -230,12 +231,17 @@ export class UI {
                : act('test-hunt', 'Test a hunt', 'Starts a solo game; the hunt begins a few seconds after the intro.')}
       ${inGame ? act('reveal', 'Make him appear', 'A planned watcher glimpse aimed at you.') : act('test-free', 'Solo game, no dread', 'Normal game with the developer rules.')}
       ${inGame ? act('relocate', 'Teleport him ahead of you', 'Unseen relocation, ignoring the cooldown.') : ''}
+      <h3>Spawn an item</h3>
+      ${inGame ? `<p class="hint">Lands on the ground just in front of you. Spawn as many as you like, then resume.</p>
+        <div class="dev-spawn">${Object.entries(DEV_ITEMS).map(([k, l]) => `<button class="small" data-dev="spawn:${k}" ${on && local ? '' : 'disabled'}>${esc(l)}</button>`).join('')}</div>
+        <p class="hint" id="dev-status"></p>` : '<p class="hint">Available from the pause menu once a single-player night is running.</p>'}
       <h3>Hotkeys <small class="hint">(Developer mode, in game)</small></h3>
       <table class="controls"><tr><td><kbd>F6</kbd></td><td>Start a hunt now</td></tr><tr><td><kbd>F7</kbd></td><td>Make him appear</td></tr><tr><td><kbd>F8</kbd></td><td>Teleport him ahead of you</td></tr><tr><td><kbd>F9</kbd></td><td>Toggle invincible</td></tr></table>`);
     el.onclick = (e) => {
       const b = e.target.closest('[data-dev]'); if (!b || !s.devMode) return;
       const a = b.dataset.dev;
       if (a === 'test-hunt' || a === 'test-free') { this.closePanel(); g.devStart(a === 'test-hunt'); }
+      else if (a.startsWith('spawn:')) { const st = el.querySelector('#dev-status'); if (st) st.textContent = g.devAction(a) || ''; }   // stay paused: spawn several
       else { g.pause(false); g.devAction(a); }
     };
     el.oninput = (e) => {

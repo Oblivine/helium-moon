@@ -6,7 +6,7 @@ import { World } from '../shared/world.js';
 import { GameSim } from '../shared/sim/sim.js';
 import { CONFIG } from '../shared/config.js';
 import { pointAtDistance } from '../shared/math.js';
-import { devHunt } from '../shared/sim/dev.js';
+import { devSpawn, DEV_ITEMS, devHunt } from '../shared/sim/dev.js';
 
 const world = new World({});
 function game(dev) {
@@ -38,4 +38,22 @@ test('invincible: hits register but do no damage', () => {
   sim.damagePlayer(p, 'hv', sim.hv);
   assert.equal(p.health, CONFIG.PLAYER.MAX_HEALTH);
   assert.ok(sim.drainEvents().some((e) => e.type === 'hit' && e.dev));
+});
+
+test('spawn: every Developer item appears in front of the player and works like the real thing', () => {
+  const { sim, p } = game({ skipDread: true });
+  sim.drainEvents();
+  for (const kind of Object.keys(DEV_ITEMS)) assert.equal(devSpawn(sim, 'p1', kind), true, kind);
+  const ev = sim.drainEvents(), spawned = ev.filter((e) => e.type === 'item_spawn').map((e) => e.item);
+  assert.equal(spawned.length, Object.keys(DEV_ITEMS).length - 2, 'the bottle goes to the hand and the balloon is a balloon');
+  assert.equal(p.bottles, 1);
+  assert.ok(ev.some((e) => e.type === 'balloon'));
+  for (const it of spawned) {
+    assert.ok(Math.hypot(it.x - p.x, it.z - p.z) < 2.6, `${it.kind} within reach`);
+    assert.equal(sim.obj.pickup(p, it.id), true, `${it.kind} can be picked up`);
+  }
+  assert.equal(p.cigs, CONFIG.VICE.CIG_PACK); assert.equal(p.beers, 1);
+  assert.equal(sim.obj.team.fuel && sim.obj.team.fuse && sim.obj.team.crank, true);
+  assert.equal(sim.obj.notesRead.length, 1);
+  assert.equal(typeof devSpawn(sim, 'p1', 'tank'), 'string');
 });

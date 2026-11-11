@@ -29,7 +29,7 @@ import { VoiceSystem } from '../audio/voice.js';
 import { LocalTransport } from '../net/transport.js';
 import { SnapBuffer, HeliumView, SkunkView, PlayerAvatar, ObjectiveViews, PLAYER_COLORS } from '../entities/views.js';
 import { WildlifeSystem } from '../entities/wildlife.js';
-import { devHunt, devReveal, devRelocate } from '../../shared/sim/dev.js';
+import { devHunt, devReveal, devRelocate, devSpawn, DEV_ITEMS } from '../../shared/sim/dev.js';
 
 const ATTACK_LOCK_DIST = 1.22;   // m (4 ft): the camera locks onto him only this close (owner)
 
@@ -334,6 +334,12 @@ export class Game {
     if (!sim || this.mode !== 'playing') { this.ui.toast('Developer actions work in single player.', 2500); return; }
     sim.dev = { skipDread: !!this.settings.devSkipDread, invincible: !!this.settings.devInvincible };
     const id = this.myId || 'p1';
+    if (a.startsWith('spawn:')) {   // returns the line the Developer panel shows
+      const kind = a.slice(6), r = devSpawn(sim, id, kind);
+      const msg = r === true ? `Spawned: ${DEV_ITEMS[kind]}` : `Couldn't spawn that (${r})`;
+      this.ui.toast(`DEV: ${msg}`, 2000);
+      return msg;
+    }
     const ok = a === 'hunt' ? devHunt(sim, id) : a === 'reveal' ? devReveal(sim, id) : a === 'relocate' ? devRelocate(sim, id) : false;
     const label = { hunt: 'Hunt started', reveal: 'He will show himself', relocate: 'He moved ahead of you' }[a];
     const why = typeof ok === 'string' ? ok : a === 'relocate' ? 'no hidden spot ahead' : 'try again in a moment';
@@ -534,6 +540,7 @@ export class Game {
         else this._reactAvatar(e.pid, pos);
         if (e.pid === this.myId) this._hint('popped', 'That was loud. If he is anywhere near, he heard it. Crouch to pass under them, or untie them.');
         break;
+      case 'item_spawn': this.info.layout.items.push(e.item); this.objViews._item(e.item, this.world); break;   // Developer menu
       case 'vice': if (e.pid === this.myId) this.vice = e; break;
       case 'smoke':
         if (e.pid === this.myId) { this.arms.startSmoke(e.dur); A.ui('drag', 0.5); this._hint('smoke', 'While it burns your hands are steadier and repairs go faster. He can see the ember and smell the smoke: you cannot hide until it is out. Each one costs you breath for the rest of the night.', 11000); }

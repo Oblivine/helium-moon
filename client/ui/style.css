@@ -332,3 +332,7 @@ html.touch #vice-tool { right:auto; left:50%; transform:translateX(-50%); bottom
 html.touch #vice-tool kbd { display:none; }
 #touch .t-smoke { right: 150px; bottom: 186px; width: 56px; height: 40px; border-radius: 20px; }
 #touch .t-drink { right: 212px; bottom: 124px; width: 56px; height: 40px; border-radius: 20px; }
+
+.dev-spawn { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.dev-spawn button { flex: 0 0 auto; }
+#dev-status { min-height: 1.2em; color: var(--ok); }
